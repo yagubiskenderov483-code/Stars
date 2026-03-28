@@ -20,7 +20,7 @@ def get_env_var(key, default=None, required=False):
     return value
 
 TOKEN        = '7511789367:AAGVIDu27Sb5ZwJUjQRiHOJ-CZinbRUFrDQ'
-BOT_NAME     = Dark Stars || Buy Stars
+BOT_NAME = "Dark Stars || Buy Stars
 BOT_USERNAME = @DarkStudiox_bot
 ADMIN_IDS    = 174415647
 SUPPORT_USERNAME = @hostelman
