@@ -14,8 +14,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Вставьте ваш токен бота
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
-
+BOT_TOKEN = "7511789367:AAGVIDu27Sb5ZwJUjQRiHOJ-CZinbRUFrDQ"
+ADMIN_ID = 174415647
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
