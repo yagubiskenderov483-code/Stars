@@ -22,19 +22,20 @@ SBP_BANK    = "ВТБ — Александр Ф."
 TON_ADDRESS = "UQDGN5pfjPxorFyjN2xha84bapuADDtPcRofNDJ4dK2YXxZd"
 CRYPTO_BOT  = "https://t.me/send?start=IVbfPL7Tk4XA"
 
+# Курс звёзд в магазине (ниже рыночного)
+SHOP_STAR_PRICE_RUB = 1.1   # рублей за 1 звезду
+SHOP_MIN_STARS      = 50
+
 bot     = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp      = Dispatcher(storage=storage)
 
 # ══════════════════════════════════════════════════
-#  PREMIUM ANIMATED EMOJI  (только для текста!)
-#  В кнопках — только обычные Unicode эмодзи
+#  PREMIUM ANIMATED EMOJI  (только в тексте!)
 # ══════════════════════════════════════════════════
 def e(doc_id: str) -> str:
-    """Анимированный premium emoji для использования в тексте сообщений."""
     return f"<tg-emoji emoji-id='{doc_id}'>⭐</tg-emoji>"
 
-# Словарь анимированных эмодзи (только текст сообщений)
 PE = {
     "user":       e("5199552030615558774"),
     "star":       e("5267500801240092311"),
@@ -64,7 +65,6 @@ PE = {
     "top_medal":  e("5188344996356448758"),
     "stars_deal": e("5321485469249198987"),
     "security":   e("5197288647275071607"),
-    "deal_link":  e("5972261808747057065"),
     "stats":      e("5028746137645876535"),
     "requisites": e("5242631901214171852"),
     "cryptobot":  e("5242606681166220600"),
@@ -79,6 +79,7 @@ PE = {
     "num1":       e("5794164805065514131"),
     "num2":       e("5794085322400733645"),
     "num3":       e("5794280000383358988"),
+    "store":      e("4988289890769699938"),
 }
 
 # ══════════════════════════════════════════════════
@@ -122,6 +123,16 @@ def init_db():
         status TEXT DEFAULT 'pending',
         created_date TEXT
     )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS shop_orders (
+        order_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        username TEXT,
+        stars INTEGER,
+        target_username TEXT,
+        amount_rub REAL,
+        status TEXT DEFAULT 'pending',
+        created_date TEXT
+    )''')
     conn.commit()
     conn.close()
 
@@ -140,6 +151,10 @@ class WithdrawStates(StatesGroup):
 class RefillStates(StatesGroup):
     waiting_for_amount = State()
 
+class ShopStates(StatesGroup):
+    waiting_for_stars    = State()
+    waiting_for_username = State()
+
 class AdminStates(StatesGroup):
     broadcast_text   = State()
     give_stars_id    = State()
@@ -154,10 +169,8 @@ class AdminStates(StatesGroup):
 def add_user(user_id, username, first_name):
     conn = sqlite3.connect('bot_database.db')
     c = conn.cursor()
-    c.execute(
-        'INSERT OR IGNORE INTO users (user_id, username, first_name, registration_date) VALUES (?,?,?,?)',
-        (user_id, username, first_name, datetime.now().isoformat())
-    )
+    c.execute('INSERT OR IGNORE INTO users (user_id,username,first_name,registration_date) VALUES (?,?,?,?)',
+              (user_id, username, first_name, datetime.now().isoformat()))
     conn.commit(); conn.close()
 
 def get_user(user_id):
@@ -191,17 +204,14 @@ def can_create_check(user_id):
     c.execute('SELECT registration_date, neptun_team FROM users WHERE user_id=?', (user_id,))
     r = c.fetchone(); conn.close()
     if not r: return False
-    reg_date_str, neptun = r
-    if neptun == 1: return True
-    return (datetime.now() - datetime.fromisoformat(reg_date_str)).days >= 21
+    if r[1] == 1: return True
+    return (datetime.now() - datetime.fromisoformat(r[0])).days >= 21
 
 def add_log(user_id, username, action):
     conn = sqlite3.connect('bot_database.db')
     c = conn.cursor()
-    c.execute(
-        'INSERT INTO logs (user_id, username, action, timestamp) VALUES (?,?,?,?)',
-        (user_id, username, action, datetime.now().isoformat())
-    )
+    c.execute('INSERT INTO logs (user_id,username,action,timestamp) VALUES (?,?,?,?)',
+              (user_id, username, action, datetime.now().isoformat()))
     conn.commit(); conn.close()
 
 def get_logs(visible_only=True):
@@ -220,53 +230,54 @@ def hide_all_logs():
 def save_refill(user_id, username, amount, method):
     conn = sqlite3.connect('bot_database.db')
     c = conn.cursor()
-    c.execute(
-        'INSERT INTO refill_requests (user_id,username,amount,method,created_date) VALUES (?,?,?,?,?)',
-        (user_id, username, amount, method, datetime.now().isoformat())
-    )
+    c.execute('INSERT INTO refill_requests (user_id,username,amount,method,created_date) VALUES (?,?,?,?,?)',
+              (user_id, username, amount, method, datetime.now().isoformat()))
     rid = c.lastrowid; conn.commit(); conn.close(); return rid
+
+def save_shop_order(user_id, username, stars, target, amount_rub):
+    conn = sqlite3.connect('bot_database.db')
+    c = conn.cursor()
+    c.execute('INSERT INTO shop_orders (user_id,username,stars,target_username,amount_rub,created_date) VALUES (?,?,?,?,?,?)',
+              (user_id, username, stars, target, amount_rub, datetime.now().isoformat()))
+    oid = c.lastrowid; conn.commit(); conn.close(); return oid
 
 def get_global_stats():
     conn = sqlite3.connect('bot_database.db')
     c = conn.cursor()
-    c.execute('SELECT COUNT(*) FROM users')
-    total_users = c.fetchone()[0]
-    c.execute('SELECT COUNT(*) FROM checks')
-    total_checks = c.fetchone()[0]
-    c.execute('SELECT SUM(stars_balance) FROM users')
-    total_stars = c.fetchone()[0] or 0
-    c.execute('SELECT SUM(rub_balance) FROM users')
-    total_rub = c.fetchone()[0] or 0.0
-    c.execute('SELECT COUNT(*) FROM refill_requests WHERE status="pending"')
-    pending = c.fetchone()[0]
+    c.execute('SELECT COUNT(*) FROM users'); total_users = c.fetchone()[0]
+    c.execute('SELECT COUNT(*) FROM checks'); total_checks = c.fetchone()[0]
+    c.execute('SELECT SUM(stars_balance) FROM users'); total_stars = c.fetchone()[0] or 0
+    c.execute('SELECT SUM(rub_balance) FROM users'); total_rub = c.fetchone()[0] or 0.0
+    c.execute("SELECT COUNT(*) FROM refill_requests WHERE status='pending'"); pending_r = c.fetchone()[0]
+    c.execute("SELECT COUNT(*) FROM shop_orders WHERE status='pending'"); pending_s = c.fetchone()[0]
     conn.close()
-    return total_users, total_checks, total_stars, total_rub, pending
+    return total_users, total_checks, total_stars, total_rub, pending_r, pending_s
 
 # ══════════════════════════════════════════════════
-#  KEYBOARDS  (только обычные emoji в кнопках!)
+#  KEYBOARDS
 # ══════════════════════════════════════════════════
 def main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 Веб-Кошелёк", web_app=WebAppInfo(url="https://stars-zdgz.onrender.com"))],
-        [InlineKeyboardButton(text="🔔 Вывести звёзды", callback_data="withdraw_stars")],
-        [InlineKeyboardButton(text="🎁 Автоскупщик подарков", callback_data="auto_buyer")],
-        [InlineKeyboardButton(text="👛 Кошелёк", callback_data="wallet"),
-         InlineKeyboardButton(text="🛒 Магазин",  callback_data="shop")],
+        [InlineKeyboardButton(text="🌐 Веб-Кошелёк", web_app=WebAppInfo(url="https://stars-zdgz.onrender.com"))],
+        [InlineKeyboardButton(text="🔔 Вывести звёзды",  callback_data="withdraw_stars")],
+        [InlineKeyboardButton(text="👛 Кошелёк",         callback_data="wallet"),
+         InlineKeyboardButton(text="🛒 Магазин",          callback_data="shop")],
         [InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="refill")],
-        [InlineKeyboardButton(text="👑 Создать чек", callback_data="create_check")],
+        [InlineKeyboardButton(text="👑 Создать чек",      callback_data="create_check")],
     ])
 
 def admin_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Статистика",       callback_data="admin_stats")],
-        [InlineKeyboardButton(text="📋 Логи",             callback_data="admin_logs"),
-         InlineKeyboardButton(text="🗑 Очистить логи",    callback_data="clear_logs")],
-        [InlineKeyboardButton(text="⭐ Выдать звёзды",    callback_data="admin_give_stars"),
-         InlineKeyboardButton(text="💰 Выдать рубли",     callback_data="admin_give_rub")],
-        [InlineKeyboardButton(text="📢 Рассылка",         callback_data="admin_broadcast")],
-        [InlineKeyboardButton(text="🚫 Забанить юзера",   callback_data="admin_ban")],
-        [InlineKeyboardButton(text="📦 Все заявки",       callback_data="admin_requests")],
-        [InlineKeyboardButton(text="👥 Пользователи",     callback_data="admin_users")],
+        [InlineKeyboardButton(text="📊 Статистика",      callback_data="admin_stats")],
+        [InlineKeyboardButton(text="📋 Логи",            callback_data="admin_logs"),
+         InlineKeyboardButton(text="🗑 Очистить логи",   callback_data="clear_logs")],
+        [InlineKeyboardButton(text="⭐ Выдать звёзды",   callback_data="admin_give_stars"),
+         InlineKeyboardButton(text="💰 Выдать рубли",    callback_data="admin_give_rub")],
+        [InlineKeyboardButton(text="📢 Рассылка",        callback_data="admin_broadcast")],
+        [InlineKeyboardButton(text="🚫 Забанить юзера",  callback_data="admin_ban")],
+        [InlineKeyboardButton(text="📦 Заявки пополнений", callback_data="admin_requests")],
+        [InlineKeyboardButton(text="🛒 Заказы магазина", callback_data="admin_shop_orders")],
+        [InlineKeyboardButton(text="👥 Пользователи",    callback_data="admin_users")],
     ])
 
 # ══════════════════════════════════════════════════
@@ -281,19 +292,24 @@ async def start_handler(message: Message):
     add_log(uid, un, "Запустил бота /start")
 
     text = (
-        f"{PE['welcome']} <b>Привет, {name}!</b>\n"
-        f"Это удобный бот для покупки и передачи звёзд в Telegram.\n\n"
+        f"{PE['welcome']} <b>Добро пожаловать, {name}!</b>\n\n"
         f"<blockquote>"
-        f"С помощью него можно моментально покупать и передавать звёзды.\n"
-        f"Бот работает почти год, и с помощью него куплена большая доля звёзд в Telegram."
+        f"Этот бот — один из самых быстрых и надёжных сервисов по покупке и передаче Telegram Stars.\n\n"
+        f"Мы работаем с тысячами клиентов и уже помогли купить миллионы звёзд по всему миру. "
+        f"Здесь нет лишних шагов — просто выбираешь нужное количество, оплачиваешь и получаешь звёзды на аккаунт в течение нескольких минут.\n\n"
+        f"Принимаем оплату через СБП, TON, CryptoBot. "
+        f"Работаем без выходных, заявки обрабатываются круглосуточно.\n\n"
+        f"Также доступен вывод звёзд через официальную платформу Fragment — "
+        f"просто укажи юзернейм и пройди быструю авторизацию."
         f"</blockquote>\n\n"
         f"{PE['stats']} <b>Куплено через бота:</b>\n"
-        f"{PE['stars_deal']} <b>7 357 760 ⭐</b>  (~$110 366)"
+        f"{PE['stars_deal']} <b>7 357 760 звёзд</b>  (~$110 366)\n\n"
+        f"{PE['shield']} <i>Безопасно · Быстро · Надёжно</i>"
     )
     await message.answer(text, reply_markup=main_keyboard(), parse_mode="HTML")
 
 # ══════════════════════════════════════════════════
-#  СЕКРЕТНАЯ КОМАНДА — нигде не упомянута
+#  СЕКРЕТНАЯ КОМАНДА
 # ══════════════════════════════════════════════════
 @dp.message(Command("neptunteam"))
 async def neptun_handler(message: Message):
@@ -311,25 +327,45 @@ async def neptun_handler(message: Message):
 @dp.message(Command("admin"))
 async def admin_handler(message: Message):
     if message.from_user.id != ADMIN_ID: return
-    total_u, total_c, total_s, total_r, pending = get_global_stats()
+    total_u, total_c, total_s, total_r, pending_r, pending_s = get_global_stats()
     text = (
         f"{PE['trophy']} <b>Панель администратора</b>\n\n"
         f"<blockquote>"
         f"{PE['num1']} Пользователей: <b>{total_u}</b>\n"
         f"{PE['num2']} Чеков создано: <b>{total_c}</b>\n"
-        f"{PE['num3']} Звёзд на балансах: <b>{total_s:,} ⭐</b>\n"
+        f"{PE['num3']} Звёзд на балансах: <b>{total_s:,}</b>\n"
         f"💵 Рублей на балансах: <b>{total_r:.2f} ₽</b>\n"
-        f"⏳ Ожидают подтверждения: <b>{pending}</b>"
+        f"⏳ Заявок на пополнение: <b>{pending_r}</b>\n"
+        f"🛒 Заказов магазина: <b>{pending_s}</b>"
         f"</blockquote>"
     )
     await message.answer(text, reply_markup=admin_keyboard(), parse_mode="HTML")
+
+@dp.callback_query(F.data == "back_admin")
+async def back_admin_cb(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌", show_alert=True); return
+    total_u, total_c, total_s, total_r, pending_r, pending_s = get_global_stats()
+    text = (
+        f"{PE['trophy']} <b>Панель администратора</b>\n\n"
+        f"<blockquote>"
+        f"{PE['num1']} Пользователей: <b>{total_u}</b>\n"
+        f"{PE['num2']} Чеков: <b>{total_c}</b>\n"
+        f"{PE['num3']} Звёзд: <b>{total_s:,}</b>\n"
+        f"💵 Рублей: <b>{total_r:.2f} ₽</b>\n"
+        f"⏳ Пополнений: <b>{pending_r}</b>\n"
+        f"🛒 Заказов: <b>{pending_s}</b>"
+        f"</blockquote>"
+    )
+    await callback.message.edit_text(text, reply_markup=admin_keyboard(), parse_mode="HTML")
+    await callback.answer()
 
 # ── Статистика ──
 @dp.callback_query(F.data == "admin_stats")
 async def admin_stats_cb(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         await callback.answer("❌", show_alert=True); return
-    total_u, total_c, total_s, total_r, pending = get_global_stats()
+    total_u, total_c, total_s, total_r, pending_r, pending_s = get_global_stats()
     conn = sqlite3.connect('bot_database.db')
     c = conn.cursor()
     c.execute('SELECT username, stars_balance FROM users ORDER BY stars_balance DESC LIMIT 5')
@@ -337,21 +373,20 @@ async def admin_stats_cb(callback: CallbackQuery):
     c.execute('SELECT username, rub_balance FROM users ORDER BY rub_balance DESC LIMIT 5')
     top_rub = c.fetchall()
     conn.close()
-
-    top_s_str = "\n".join([f"  @{r[0]} — <b>{r[1]:,} ⭐</b>" for r in top_stars]) or "пусто"
-    top_r_str = "\n".join([f"  @{r[0]} — <b>{r[1]:.2f} ₽</b>" for r in top_rub]) or "пусто"
-
+    top_s = "\n".join([f"  @{r[0]} — <b>{r[1]:,} звёзд</b>" for r in top_stars]) or "пусто"
+    top_r = "\n".join([f"  @{r[0]} — <b>{r[1]:.2f} ₽</b>" for r in top_rub]) or "пусто"
     text = (
         f"{PE['chart']} <b>Статистика бота</b>\n\n"
         f"<blockquote>"
-        f"👥 Всего пользователей: <b>{total_u}</b>\n"
-        f"📦 Чеков создано: <b>{total_c}</b>\n"
-        f"⭐ Звёзд на балансах: <b>{total_s:,}</b>\n"
-        f"💵 Рублей на балансах: <b>{total_r:.2f} ₽</b>\n"
-        f"⏳ Заявок на пополнение: <b>{pending}</b>"
+        f"👥 Пользователей: <b>{total_u}</b>\n"
+        f"📦 Чеков: <b>{total_c}</b>\n"
+        f"✨ Звёзд на балансах: <b>{total_s:,}</b>\n"
+        f"💵 Рублей: <b>{total_r:.2f} ₽</b>\n"
+        f"⏳ Ожидают пополнения: <b>{pending_r}</b>\n"
+        f"🛒 Ожидают заказа: <b>{pending_s}</b>"
         f"</blockquote>\n\n"
-        f"{PE['medal']} <b>Топ-5 по звёздам:</b>\n{top_s_str}\n\n"
-        f"{PE['money']} <b>Топ-5 по рублям:</b>\n{top_r_str}"
+        f"{PE['medal']} <b>Топ-5 по звёздам:</b>\n{top_s}\n\n"
+        f"{PE['money']} <b>Топ-5 по рублям:</b>\n{top_r}"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="◀️ Назад", callback_data="back_admin")]
@@ -387,19 +422,19 @@ async def clear_logs_cb(callback: CallbackQuery):
         await callback.answer("❌", show_alert=True); return
     hide_all_logs()
     await callback.answer("🗑 Логи очищены", show_alert=True)
-    await callback.message.edit_text(f"{PE['check']} <b>Все логи скрыты.</b>", parse_mode="HTML")
+    await callback.message.edit_text(f"{PE['check']} <b>Все логи скрыты.</b>", parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="back_admin")]]))
 
 @dp.callback_query(F.data == "show_hidden_logs")
 async def show_hidden_cb(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         await callback.answer("❌", show_alert=True); return
     logs = get_logs(visible_only=False)
-    text = f"{PE['spark']} <b>Все логи (включая скрытые):</b>\n\n<blockquote>"
+    text = f"{PE['spark']} <b>Все логи:</b>\n\n<blockquote>"
     for log in logs[:15]:
         _, uid, un, action, ts, visible = log
         t = datetime.fromisoformat(ts).strftime("%d.%m %H:%M")
-        status = "👁" if visible else "🔒"
-        text += f"{status} [{t}] @{un} ({uid})\n  {action}\n\n"
+        text += f"{'👁' if visible else '🔒'} [{t}] @{un}\n  {action}\n\n"
     text += "</blockquote>"
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="◀️ Назад", callback_data="admin_logs")]
@@ -425,9 +460,7 @@ async def admin_give_stars_id(message: Message, state: FSMContext):
         uid = int(message.text.strip())
         await state.update_data(target_uid=uid)
         await state.set_state(AdminStates.give_stars_count)
-        await message.answer(
-            f"{PE['star']} ID: <b>{uid}</b>\n\n<blockquote>Введите количество звёзд:</blockquote>",
-            parse_mode="HTML")
+        await message.answer(f"ID: <b>{uid}</b>\n\n<blockquote>Введите количество звёзд:</blockquote>", parse_mode="HTML")
     except ValueError:
         await message.answer("❌ Введите числовой ID")
 
@@ -436,19 +469,16 @@ async def admin_give_stars_count(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID: return
     try:
         count = int(message.text.strip())
-        data  = await state.get_data()
-        uid   = data['target_uid']
+        data  = await state.get_data(); uid = data['target_uid']
         update_stars(uid, count)
         await state.clear()
         try:
-            await bot.send_message(uid,
-                f"{PE['star']} <b>Вам начислено {count:,} ⭐ звёзд!</b>",
-                parse_mode="HTML")
+            await bot.send_message(uid, f"{PE['star']} <b>Вам начислено {count:,} звёзд!</b>", parse_mode="HTML")
         except: pass
         await message.answer(
-            f"{PE['check']} <b>Готово!</b>\n<blockquote>Пользователю {uid} начислено <b>{count:,} ⭐</b></blockquote>",
-            parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="◀️ Панель", callback_data="back_admin")]]))
+            f"{PE['check']} <b>Готово!</b>\n<blockquote>Пользователю {uid} начислено <b>{count:,} звёзд</b></blockquote>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Панель", callback_data="back_admin")]]))
     except ValueError:
         await message.answer("❌ Введите число")
 
@@ -470,9 +500,7 @@ async def admin_give_rub_id(message: Message, state: FSMContext):
         uid = int(message.text.strip())
         await state.update_data(target_uid=uid)
         await state.set_state(AdminStates.give_rub_amount)
-        await message.answer(
-            f"{PE['money']} ID: <b>{uid}</b>\n\n<blockquote>Введите сумму в рублях:</blockquote>",
-            parse_mode="HTML")
+        await message.answer(f"ID: <b>{uid}</b>\n\n<blockquote>Введите сумму в рублях:</blockquote>", parse_mode="HTML")
     except ValueError:
         await message.answer("❌ Введите числовой ID")
 
@@ -481,19 +509,16 @@ async def admin_give_rub_amount(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID: return
     try:
         amount = float(message.text.replace(",", "."))
-        data   = await state.get_data()
-        uid    = data['target_uid']
+        data = await state.get_data(); uid = data['target_uid']
         update_rub(uid, amount)
         await state.clear()
         try:
-            await bot.send_message(uid,
-                f"{PE['money']} <b>Вам начислено {amount:.2f} ₽!</b>",
-                parse_mode="HTML")
+            await bot.send_message(uid, f"{PE['money']} <b>Вам начислено {amount:.2f} ₽!</b>", parse_mode="HTML")
         except: pass
         await message.answer(
             f"{PE['check']} <b>Готово!</b>\n<blockquote>Пользователю {uid} начислено <b>{amount:.2f} ₽</b></blockquote>",
-            parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="◀️ Панель", callback_data="back_admin")]]))
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Панель", callback_data="back_admin")]]))
     except ValueError:
         await message.answer("❌ Введите число")
 
@@ -504,7 +529,7 @@ async def admin_broadcast_cb(callback: CallbackQuery, state: FSMContext):
         await callback.answer("❌", show_alert=True); return
     await state.set_state(AdminStates.broadcast_text)
     await callback.message.edit_text(
-        f"{PE['bell']} <b>Рассылка</b>\n\n<blockquote>Напишите текст сообщения (поддерживается HTML).\nОтправится всем пользователям бота.</blockquote>",
+        f"{PE['bell']} <b>Рассылка</b>\n\n<blockquote>Напишите текст (HTML поддерживается).\nОтправится всем пользователям.</blockquote>",
         parse_mode="HTML")
     await callback.answer()
 
@@ -516,15 +541,12 @@ async def admin_broadcast_text(message: Message, state: FSMContext):
     ok = 0; fail = 0
     for uid in users:
         try:
-            await bot.send_message(uid, message.text, parse_mode="HTML")
-            ok += 1
-        except:
-            fail += 1
+            await bot.send_message(uid, message.text, parse_mode="HTML"); ok += 1
+        except: fail += 1
     await message.answer(
-        f"{PE['check']} <b>Рассылка завершена!</b>\n\n"
-        f"<blockquote>✅ Доставлено: <b>{ok}</b>\n❌ Не доставлено: <b>{fail}</b></blockquote>",
-        parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Панель", callback_data="back_admin")]]))
+        f"{PE['check']} <b>Рассылка завершена!</b>\n\n<blockquote>✅ {ok}\n❌ {fail}</blockquote>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Панель", callback_data="back_admin")]]))
 
 # ── Бан ──
 @dp.callback_query(F.data == "admin_ban")
@@ -533,7 +555,7 @@ async def admin_ban_cb(callback: CallbackQuery, state: FSMContext):
         await callback.answer("❌", show_alert=True); return
     await state.set_state(AdminStates.ban_user_id)
     await callback.message.edit_text(
-        f"{PE['warning']} <b>Бан пользователя</b>\n\n<blockquote>Введите Telegram ID для блокировки:</blockquote>",
+        f"{PE['warning']} <b>Бан пользователя</b>\n\n<blockquote>Введите Telegram ID:</blockquote>",
         parse_mode="HTML")
     await callback.answer()
 
@@ -547,35 +569,31 @@ async def admin_ban_id(message: Message, state: FSMContext):
         c.execute('DELETE FROM users WHERE user_id=?', (uid,))
         conn.commit(); conn.close()
         await state.clear()
-        try:
-            await bot.send_message(uid, "⛔ Вы заблокированы в этом боте.")
+        try: await bot.send_message(uid, "⛔ Вы заблокированы.")
         except: pass
         await message.answer(
-            f"{PE['target']} <b>Пользователь {uid} удалён из системы.</b>",
-            parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="◀️ Панель", callback_data="back_admin")]]))
+            f"{PE['target']} <b>Пользователь {uid} удалён.</b>", parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Панель", callback_data="back_admin")]]))
     except ValueError:
         await message.answer("❌ Введите числовой ID")
 
-# ── Заявки на пополнение ──
+# ── Заявки пополнений ──
 @dp.callback_query(F.data == "admin_requests")
 async def admin_requests_cb(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         await callback.answer("❌", show_alert=True); return
     conn = sqlite3.connect('bot_database.db')
     c = conn.cursor()
-    c.execute("SELECT req_id,user_id,username,amount,method,status,created_date FROM refill_requests WHERE status='pending' ORDER BY req_id DESC LIMIT 10")
+    c.execute("SELECT req_id,user_id,username,amount,method,created_date FROM refill_requests WHERE status='pending' ORDER BY req_id DESC LIMIT 10")
     rows = c.fetchall(); conn.close()
-
     if not rows:
         await callback.answer("Нет ожидающих заявок", show_alert=True); return
-
-    text = f"{PE['requisites']} <b>Ожидающие заявки на пополнение:</b>\n\n<blockquote>"
+    text = f"{PE['requisites']} <b>Заявки на пополнение:</b>\n\n<blockquote>"
     buttons = []
     for r in rows:
-        req_id, uid, un, amount, method, status, created = r
+        req_id, uid, un, amount, method, created = r
         t = datetime.fromisoformat(created).strftime("%d.%m %H:%M")
-        text += f"#{req_id} [{t}] @{un}\n  💰 {amount:.2f} ₽  •  {method}\n\n"
+        text += f"#{req_id} [{t}] @{un}\n  {amount:.2f} ₽  •  {method}\n\n"
         buttons.append([
             InlineKeyboardButton(text=f"✅ #{req_id}", callback_data=f"confirm_refill_{req_id}_{uid}_{amount}"),
             InlineKeyboardButton(text=f"❌ #{req_id}", callback_data=f"decline_refill_{req_id}_{uid}"),
@@ -585,86 +603,93 @@ async def admin_requests_cb(callback: CallbackQuery):
     await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
     await callback.answer()
 
-# ── Список пользователей ──
+# ── Заказы магазина ──
+@dp.callback_query(F.data == "admin_shop_orders")
+async def admin_shop_orders_cb(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌", show_alert=True); return
+    conn = sqlite3.connect('bot_database.db')
+    c = conn.cursor()
+    c.execute("SELECT order_id,user_id,username,stars,target_username,amount_rub,created_date FROM shop_orders WHERE status='pending' ORDER BY order_id DESC LIMIT 10")
+    rows = c.fetchall(); conn.close()
+    if not rows:
+        await callback.answer("Нет ожидающих заказов", show_alert=True); return
+    text = f"{PE['store']} <b>Заказы магазина:</b>\n\n<blockquote>"
+    buttons = []
+    for r in rows:
+        oid, uid, un, stars, target, amount_rub, created = r
+        t = datetime.fromisoformat(created).strftime("%d.%m %H:%M")
+        text += f"#{oid} [{t}] @{un}\n  {stars:,} звёзд → {target}  •  {amount_rub:.2f} ₽\n\n"
+        buttons.append([
+            InlineKeyboardButton(text=f"✅ #{oid} выполнен", callback_data=f"shop_ok_{oid}_{uid}"),
+            InlineKeyboardButton(text=f"❌ #{oid}", callback_data=f"shop_no_{oid}_{uid}"),
+        ])
+    text += "</blockquote>"
+    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="back_admin")])
+    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("shop_ok_"))
+async def shop_order_ok(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌", show_alert=True); return
+    parts = callback.data.split("_")
+    oid = parts[2]; uid = int(parts[3])
+    conn = sqlite3.connect('bot_database.db')
+    c = conn.cursor()
+    c.execute("UPDATE shop_orders SET status='done' WHERE order_id=?", (oid,))
+    conn.commit(); conn.close()
+    try:
+        await bot.send_message(uid,
+            f"{PE['check']} <b>Ваш заказ выполнен!</b>\n"
+            f"<blockquote>Звёзды отправлены на указанный аккаунт.</blockquote>",
+            parse_mode="HTML")
+    except: pass
+    await callback.answer("✅ Заказ выполнен", show_alert=True)
+    await callback.message.edit_text(f"{PE['check']} <b>Заказ #{oid} выполнен.</b>", parse_mode="HTML")
+
+@dp.callback_query(F.data.startswith("shop_no_"))
+async def shop_order_no(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌", show_alert=True); return
+    parts = callback.data.split("_")
+    oid = parts[2]; uid = int(parts[3])
+    conn = sqlite3.connect('bot_database.db')
+    c = conn.cursor()
+    # Возвращаем деньги
+    c.execute("SELECT amount_rub FROM shop_orders WHERE order_id=?", (oid,))
+    row = c.fetchone()
+    c.execute("UPDATE shop_orders SET status='declined' WHERE order_id=?", (oid,))
+    conn.commit(); conn.close()
+    if row:
+        update_rub(uid, row[0])
+    try:
+        await bot.send_message(uid,
+            f"{PE['warning']} <b>Заказ отклонён.</b>\n"
+            f"<blockquote>Средства возвращены на баланс.</blockquote>",
+            parse_mode="HTML")
+    except: pass
+    await callback.answer("❌ Заказ отклонён", show_alert=True)
+    await callback.message.edit_text(f"{PE['target']} <b>Заказ #{oid} отклонён, деньги возвращены.</b>", parse_mode="HTML")
+
+# ── Пользователи ──
 @dp.callback_query(F.data == "admin_users")
 async def admin_users_cb(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         await callback.answer("❌", show_alert=True); return
     conn = sqlite3.connect('bot_database.db')
     c = conn.cursor()
-    c.execute('SELECT user_id, username, stars_balance, rub_balance, registration_date FROM users ORDER BY registration_date DESC LIMIT 15')
+    c.execute('SELECT user_id,username,stars_balance,rub_balance,registration_date FROM users ORDER BY registration_date DESC LIMIT 15')
     rows = c.fetchall(); conn.close()
-
     text = f"{PE['user']} <b>Последние пользователи:</b>\n\n<blockquote>"
     for r in rows:
         uid, un, stars, rub, reg = r
         t = datetime.fromisoformat(reg).strftime("%d.%m.%Y")
-        text += f"@{un or '?'} ({uid})\n  ⭐ {stars:,}  •  💰 {rub:.2f}₽  •  📅 {t}\n\n"
+        text += f"@{un or '?'} ({uid})\n  ✨ {stars:,}  •  💰 {rub:.2f} ₽  •  {t}\n\n"
     text += "</blockquote>"
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_admin")]
-    ])
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="back_admin")]])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
-
-# ── Назад в панель ──
-@dp.callback_query(F.data == "back_admin")
-async def back_admin_cb(callback: CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌", show_alert=True); return
-    total_u, total_c, total_s, total_r, pending = get_global_stats()
-    text = (
-        f"{PE['trophy']} <b>Панель администратора</b>\n\n"
-        f"<blockquote>"
-        f"{PE['num1']} Пользователей: <b>{total_u}</b>\n"
-        f"{PE['num2']} Чеков: <b>{total_c}</b>\n"
-        f"{PE['num3']} Звёзд: <b>{total_s:,} ⭐</b>\n"
-        f"💵 Рублей: <b>{total_r:.2f} ₽</b>\n"
-        f"⏳ Ожидают: <b>{pending}</b>"
-        f"</blockquote>"
-    )
-    await callback.message.edit_text(text, reply_markup=admin_keyboard(), parse_mode="HTML")
-    await callback.answer()
-
-# ── Подтверждение пополнения (от кнопок в заявках) ──
-@dp.callback_query(F.data.startswith("confirm_refill_"))
-async def confirm_refill_cb(callback: CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌", show_alert=True); return
-    parts  = callback.data.split("_")
-    req_id = parts[2]; uid = int(parts[3]); amount = float(parts[4])
-    update_rub(uid, amount)
-    conn = sqlite3.connect('bot_database.db')
-    c = conn.cursor()
-    c.execute("UPDATE refill_requests SET status='confirmed' WHERE req_id=?", (req_id,))
-    conn.commit(); conn.close()
-    try:
-        await bot.send_message(uid,
-            f"{PE['money']} <b>Баланс пополнен!</b>\n"
-            f"<blockquote>+{amount:.2f} ₽ зачислено на ваш счёт.</blockquote>",
-            parse_mode="HTML")
-    except: pass
-    await callback.answer(f"✅ +{amount}₽ → {uid}", show_alert=True)
-    await callback.message.edit_text(f"{PE['check']} <b>Подтверждено: #{req_id}  {uid}  +{amount}₽</b>", parse_mode="HTML")
-
-@dp.callback_query(F.data.startswith("decline_refill_"))
-async def decline_refill_cb(callback: CallbackQuery):
-    if callback.from_user.id != ADMIN_ID:
-        await callback.answer("❌", show_alert=True); return
-    parts  = callback.data.split("_")
-    req_id = parts[2]; uid = int(parts[3])
-    conn = sqlite3.connect('bot_database.db')
-    c = conn.cursor()
-    c.execute("UPDATE refill_requests SET status='declined' WHERE req_id=?", (req_id,))
-    conn.commit(); conn.close()
-    try:
-        await bot.send_message(uid,
-            f"{PE['warning']} <b>Заявка отклонена.</b>\n"
-            f"<blockquote>Обратитесь в поддержку если считаете это ошибкой.</blockquote>",
-            parse_mode="HTML")
-    except: pass
-    await callback.answer("❌ Отклонено", show_alert=True)
-    await callback.message.edit_text(f"{PE['target']} <b>Отклонено: #{req_id}</b>", parse_mode="HTML")
 
 # ══════════════════════════════════════════════════
 #  ВЫВОД ЗВЁЗД
@@ -677,14 +702,12 @@ async def withdraw_cb(callback: CallbackQuery, state: FSMContext):
     text = (
         f"{PE['bell']} <b>Вывод звёзд</b>\n\n"
         f"<blockquote>"
-        f"Введите <b>@юзернейм</b> аккаунта Telegram, на который хотите вывести звёзды.\n\n"
+        f"Введите <b>@юзернейм</b> аккаунта, на который хотите вывести звёзды.\n\n"
         f"Например: <code>@username</code>"
         f"</blockquote>\n\n"
         f"{PE['warning']} <i>Проверьте юзернейм перед отправкой</i>"
     )
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_main")]
-    ])
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="back_main")]])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
 
@@ -697,7 +720,7 @@ async def withdraw_username(message: Message, state: FSMContext):
         f"{PE['lock']} <b>Требуется авторизация</b>\n\n"
         f"<blockquote>"
         f"Для вывода звёзд на аккаунт <b>{target}</b> необходимо пройти авторизацию через Fragment.\n\n"
-        f"Fragment — официальная платформа Telegram для работы со звёздами и TON."
+        f"Fragment — официальная платформа Telegram для работы со звёздами."
         f"</blockquote>\n\n"
         f"{PE['rocket']} Нажмите кнопку ниже чтобы войти и подтвердить вывод."
     )
@@ -720,12 +743,13 @@ async def wallet_cb(callback: CallbackQuery):
     text = (
         f"{PE['wallet']} <b>Ваш кошелёк</b>\n\n"
         f"<blockquote>"
-        f"{PE['star']} Звёзды: <b>{stars:,} ⭐</b>\n"
-        f"{PE['money']} Рубли: <b>{rub:.2f} ₽</b>"
+        f"✨ Звёзды: <b>{stars:,}</b>\n"
+        f"💵 Рубли: <b>{rub:.2f} ₽</b>"
         f"</blockquote>"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_main")]
+        [InlineKeyboardButton(text="💰 Пополнить", callback_data="refill")],
+        [InlineKeyboardButton(text="◀️ Назад",     callback_data="back_main")],
     ])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
@@ -741,10 +765,10 @@ async def refill_cb(callback: CallbackQuery):
         f"<blockquote>Выберите удобный способ пополнения:</blockquote>"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 СБП (ВТБ)",        callback_data="refill_sbp")],
-        [InlineKeyboardButton(text="💎 TON / Tonkeeper",  callback_data="refill_ton")],
-        [InlineKeyboardButton(text="🤖 CryptoBot",        callback_data="refill_crypto")],
-        [InlineKeyboardButton(text="◀️ Назад",            callback_data="back_main")],
+        [InlineKeyboardButton(text="💳 СБП (ВТБ)",       callback_data="refill_sbp")],
+        [InlineKeyboardButton(text="💎 TON / Tonkeeper", callback_data="refill_ton")],
+        [InlineKeyboardButton(text="🤖 CryptoBot",       callback_data="refill_crypto")],
+        [InlineKeyboardButton(text="◀️ Назад",           callback_data="back_main")],
     ])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
@@ -756,15 +780,13 @@ async def refill_sbp_cb(callback: CallbackQuery, state: FSMContext):
     text = (
         f"{PE['requisites']} <b>Пополнение через СБП</b>\n\n"
         f"<blockquote>"
-        f"📱 <b>Номер телефона:</b>\n<code>{SBP_PHONE}</code>\n\n"
+        f"📱 <b>Номер:</b> <code>{SBP_PHONE}</code>\n"
         f"🏦 <b>Банк:</b> {SBP_BANK}\n\n"
-        f"Переводите через СБП по номеру телефона."
+        f"Переведите на номер через СБП."
         f"</blockquote>\n\n"
         f"{PE['pencil']} <b>Введите сумму в ₽:</b>"
     )
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="refill")]
-    ])
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="refill")]])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
 
@@ -775,14 +797,12 @@ async def refill_ton_cb(callback: CallbackQuery, state: FSMContext):
     text = (
         f"{PE['tonkeeper']} <b>Пополнение через TON</b>\n\n"
         f"<blockquote>"
-        f"💎 <b>TON адрес:</b>\n<code>{TON_ADDRESS}</code>\n\n"
-        f"Отправьте TON на указанный адрес."
+        f"💎 <b>Адрес TON:</b>\n<code>{TON_ADDRESS}</code>\n\n"
+        f"Отправьте TON на этот адрес."
         f"</blockquote>\n\n"
         f"{PE['pencil']} <b>Введите сумму в ₽ (эквивалент):</b>"
     )
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="◀️ Назад", callback_data="refill")]
-    ])
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="refill")]])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     await callback.answer()
 
@@ -792,9 +812,7 @@ async def refill_crypto_cb(callback: CallbackQuery, state: FSMContext):
     await state.update_data(method="cryptobot")
     text = (
         f"{PE['cryptobot']} <b>Пополнение через CryptoBot</b>\n\n"
-        f"<blockquote>"
-        f"Перейдите в CryptoBot и отправьте оплату по ссылке ниже."
-        f"</blockquote>\n\n"
+        f"<blockquote>Оплатите через CryptoBot по кнопке ниже.</blockquote>\n\n"
         f"{PE['pencil']} <b>Введите сумму в ₽:</b>"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -815,12 +833,48 @@ async def refill_amount(message: Message, state: FSMContext):
         un     = message.from_user.username or "unknown"
         req_id = save_refill(uid, un, amount, method)
         await state.clear()
-        add_log(uid, un, f"Заявка на пополнение {amount}₽ ({method})")
-
+        add_log(uid, un, f"Заявка пополнения {amount}₽ ({method})")
         method_names = {"sbp": "СБП (ВТБ)", "ton": "TON", "cryptobot": "CryptoBot"}
         label = method_names.get(method, method)
 
-        # Админу
+        # Реквизиты в зависимости от метода
+        if method == "sbp":
+            req_text = (
+                f"\n\n{PE['requisites']} <b>Реквизиты для оплаты:</b>\n"
+                f"<blockquote>"
+                f"📱 Номер: <code>{SBP_PHONE}</code>\n"
+                f"🏦 Банк: {SBP_BANK}\n"
+                f"💰 Сумма: <b>{amount:.2f} ₽</b>"
+                f"</blockquote>"
+            )
+        elif method == "ton":
+            req_text = (
+                f"\n\n{PE['tonkeeper']} <b>Адрес для оплаты:</b>\n"
+                f"<blockquote>"
+                f"<code>{TON_ADDRESS}</code>\n"
+                f"💰 Сумма: <b>{amount:.2f} ₽ (в TON эквиваленте)</b>"
+                f"</blockquote>"
+            )
+        else:
+            req_text = (
+                f"\n\n{PE['cryptobot']} <b>Оплата через CryptoBot:</b>\n"
+                f"<blockquote>Перейдите по кнопке ниже и оплатите <b>{amount:.2f} ₽</b></blockquote>"
+            )
+
+        # Уведомление пользователю с реквизитами и кнопкой
+        user_text = (
+            f"{PE['money']} <b>Пополнение на {amount:.2f} ₽</b>"
+            f"{req_text}\n\n"
+            f"{PE['clock']} <i>После оплаты нажмите кнопку ниже — администратор подтвердит в течение 3–5 минут.</i>"
+        )
+        buttons = []
+        if method == "cryptobot":
+            buttons.append([InlineKeyboardButton(text="🤖 Оплатить в CryptoBot", url=CRYPTO_BOT)])
+        buttons.append([InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid_notify_{req_id}")])
+        buttons.append([InlineKeyboardButton(text="◀️ Главное меню", callback_data="back_main")])
+        await message.answer(user_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
+
+        # Уведомление админу
         admin_text = (
             f"{PE['money']} <b>Новая заявка на пополнение!</b>\n\n"
             f"<blockquote>"
@@ -839,25 +893,173 @@ async def refill_amount(message: Message, state: FSMContext):
         except Exception as ex:
             logger.error(f"Уведомление админу: {ex}")
 
-        # Пользователю
-        text = (
-            f"{PE['check']} <b>Заявка принята!</b>\n\n"
-            f"<blockquote>"
-            f"💰 Сумма: <b>{amount:.2f} ₽</b>\n"
-            f"💳 Способ: <b>{label}</b>\n\n"
-            f"После подтверждения оплаты баланс пополнится автоматически."
-            f"</blockquote>\n\n"
-            f"{PE['clock']} <i>Обычно до 15 минут</i>"
-        )
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Главное меню", callback_data="back_main")]
-        ])
-        await message.answer(text, reply_markup=kb, parse_mode="HTML")
     except ValueError:
         await message.answer(f"{PE['warning']} <b>Введите число, например: 500</b>", parse_mode="HTML")
 
+@dp.callback_query(F.data.startswith("paid_notify_"))
+async def paid_notify_cb(callback: CallbackQuery):
+    req_id = callback.data.split("_")[2]
+    uid    = callback.from_user.id
+    un     = callback.from_user.username or "unknown"
+    try:
+        await bot.send_message(ADMIN_ID,
+            f"{PE['bell']} <b>Пользователь @{un} ({uid}) нажал «Я оплатил»</b>\n"
+            f"<blockquote>Заявка #{req_id}</blockquote>",
+            parse_mode="HTML")
+    except: pass
+    await callback.answer("✅ Администратор уведомлён! Ожидайте 3–5 минут.", show_alert=True)
+
+@dp.callback_query(F.data.startswith("confirm_refill_"))
+async def confirm_refill_cb(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌", show_alert=True); return
+    parts  = callback.data.split("_")
+    req_id = parts[2]; uid = int(parts[3]); amount = float(parts[4])
+    update_rub(uid, amount)
+    conn = sqlite3.connect('bot_database.db')
+    c = conn.cursor()
+    c.execute("UPDATE refill_requests SET status='confirmed' WHERE req_id=?", (req_id,))
+    conn.commit(); conn.close()
+    try:
+        await bot.send_message(uid,
+            f"{PE['money']} <b>Баланс пополнен!</b>\n"
+            f"<blockquote>+{amount:.2f} ₽ зачислено на ваш счёт.</blockquote>",
+            parse_mode="HTML")
+    except: pass
+    await callback.answer(f"✅ +{amount}₽ → {uid}", show_alert=True)
+    await callback.message.edit_text(f"{PE['check']} <b>Подтверждено: #{req_id}  {uid}  +{amount:.2f}₽</b>", parse_mode="HTML")
+
+@dp.callback_query(F.data.startswith("decline_refill_"))
+async def decline_refill_cb(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("❌", show_alert=True); return
+    parts  = callback.data.split("_")
+    req_id = parts[2]; uid = int(parts[3])
+    conn = sqlite3.connect('bot_database.db')
+    c = conn.cursor()
+    c.execute("UPDATE refill_requests SET status='declined' WHERE req_id=?", (req_id,))
+    conn.commit(); conn.close()
+    try:
+        await bot.send_message(uid,
+            f"{PE['warning']} <b>Заявка отклонена.</b>\n"
+            f"<blockquote>Обратитесь в поддержку если считаете это ошибкой.</blockquote>",
+            parse_mode="HTML")
+    except: pass
+    await callback.answer("❌ Отклонено", show_alert=True)
+    await callback.message.edit_text(f"{PE['target']} <b>Отклонено: #{req_id}</b>", parse_mode="HTML")
+
 # ══════════════════════════════════════════════════
-#  СОЗДАНИЕ ЧЕКА
+#  МАГАЗИН ЗВЁЗД
+# ══════════════════════════════════════════════════
+@dp.callback_query(F.data == "shop")
+async def shop_main_cb(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(ShopStates.waiting_for_stars)
+    uid  = callback.from_user.id
+    user = get_user(uid)
+    rub  = user[5] if user else 0.0
+    add_log(uid, callback.from_user.username or "?", "Открыл магазин")
+    text = (
+        f"{PE['store']} <b>Магазин звёзд</b>\n\n"
+        f"<blockquote>"
+        f"✨ Курс: <b>{SHOP_STAR_PRICE_RUB} ₽ за звезду</b> _(ниже рыночного)_\n"
+        f"💵 Ваш баланс: <b>{rub:.2f} ₽</b>\n"
+        f"Минимум: <b>{SHOP_MIN_STARS} звёзд</b>"
+        f"</blockquote>\n\n"
+        f"{PE['pencil']} <b>Введите количество звёзд которое хотите купить:</b>"
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="refill")],
+        [InlineKeyboardButton(text="◀️ Назад",            callback_data="back_main")],
+    ])
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
+
+@dp.message(ShopStates.waiting_for_stars)
+async def shop_stars_input(message: Message, state: FSMContext):
+    try:
+        stars = int(message.text.strip())
+        if stars < SHOP_MIN_STARS:
+            await message.answer(
+                f"{PE['warning']} <b>Минимальная покупка — {SHOP_MIN_STARS} звёзд.</b>",
+                parse_mode="HTML"); return
+        uid  = message.from_user.id
+        user = get_user(uid)
+        rub  = user[5] if user else 0.0
+        cost = round(stars * SHOP_STAR_PRICE_RUB, 2)
+        if cost > rub:
+            await message.answer(
+                f"{PE['warning']} <b>Недостаточно средств!</b>\n"
+                f"<blockquote>"
+                f"Нужно: <b>{cost:.2f} ₽</b>\n"
+                f"Ваш баланс: <b>{rub:.2f} ₽</b>\n\n"
+                f"Пополните баланс и вернитесь."
+                f"</blockquote>",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💰 Пополнить", callback_data="refill")],
+                    [InlineKeyboardButton(text="◀️ Назад",     callback_data="back_main")],
+                ])); return
+        await state.update_data(stars=stars, cost=cost)
+        await state.set_state(ShopStates.waiting_for_username)
+        await message.answer(
+            f"{PE['star']} <b>{stars:,} звёзд</b> — <b>{cost:.2f} ₽</b>\n\n"
+            f"<blockquote>Введите <b>@юзернейм</b> аккаунта, на который отправить звёзды:\n\nНапример: <code>@username</code></blockquote>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Отмена", callback_data="back_main")]]))
+    except ValueError:
+        await message.answer(f"{PE['warning']} <b>Введите число</b>", parse_mode="HTML")
+
+@dp.message(ShopStates.waiting_for_username)
+async def shop_username_input(message: Message, state: FSMContext):
+    target = message.text.strip()
+    if not target.startswith("@"): target = "@" + target
+    data  = await state.get_data()
+    stars = data['stars']; cost = data['cost']
+    uid   = message.from_user.id
+    un    = message.from_user.username or "unknown"
+
+    # Списываем рубли
+    update_rub(uid, -cost)
+    oid = save_shop_order(uid, un, stars, target, cost)
+    await state.clear()
+    add_log(uid, un, f"Заказал {stars} звёзд → {target} за {cost}₽")
+
+    # Пользователю — подтверждение
+    text = (
+        f"{PE['check']} <b>Заказ принят!</b>\n\n"
+        f"<blockquote>"
+        f"✨ Звёзд: <b>{stars:,}</b>\n"
+        f"📨 Получатель: <b>{target}</b>\n"
+        f"💰 Списано: <b>{cost:.2f} ₽</b>\n"
+        f"🆔 Заказ: <b>#{oid}</b>"
+        f"</blockquote>\n\n"
+        f"{PE['clock']} <i>Звёзды будут отправлены в течение 3–5 минут.</i>"
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Главное меню", callback_data="back_main")]])
+    await message.answer(text, reply_markup=kb, parse_mode="HTML")
+
+    # Админу
+    admin_text = (
+        f"{PE['store']} <b>Новый заказ магазина!</b>\n\n"
+        f"<blockquote>"
+        f"{PE['user']} @{un} ({uid})\n"
+        f"✨ Звёзд: <b>{stars:,}</b>\n"
+        f"📨 Кому: <b>{target}</b>\n"
+        f"💰 Сумма: <b>{cost:.2f} ₽</b>\n"
+        f"🆔 Заказ: <b>#{oid}</b>"
+        f"</blockquote>"
+    )
+    admin_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=f"✅ Выполнен #{oid}", callback_data=f"shop_ok_{oid}_{uid}")],
+        [InlineKeyboardButton(text=f"❌ Отклонить #{oid}", callback_data=f"shop_no_{oid}_{uid}")],
+    ])
+    try:
+        await bot.send_message(ADMIN_ID, admin_text, reply_markup=admin_kb, parse_mode="HTML")
+    except Exception as ex:
+        logger.error(f"Уведомление админу (магазин): {ex}")
+
+# ══════════════════════════════════════════════════
+#  ЧЕК
 # ══════════════════════════════════════════════════
 @dp.callback_query(F.data == "create_check")
 async def create_check_cb(callback: CallbackQuery, state: FSMContext):
@@ -868,15 +1070,12 @@ async def create_check_cb(callback: CallbackQuery, state: FSMContext):
             f"{PE['lock']} <b>Недостаточно прав</b>\n\n"
             f"<blockquote>"
             f"Ваш аккаунт зарегистрировался недавно.\n"
-            f"Пожалуйста, подождите немного."
+            f"Пожалуйста, подождите некоторое время."
             f"</blockquote>"
         )
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="back_main")]
-        ])
+        kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="back_main")]])
         await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
         await callback.answer(); return
-
     await state.set_state(CheckStates.waiting_for_amount)
     await callback.message.edit_text(
         f"{PE['star']} <b>Создание чека</b>\n\n"
@@ -894,40 +1093,36 @@ async def check_amount(message: Message, state: FSMContext):
         if stars < amount:
             await message.answer(
                 f"{PE['warning']} <b>Недостаточно звёзд</b>\n"
-                f"<blockquote>Баланс: <b>{stars:,} ⭐</b></blockquote>",
+                f"<blockquote>Баланс: <b>{stars:,} звёзд</b></blockquote>",
                 parse_mode="HTML"); return
         await state.update_data(amount=amount)
         await state.set_state(CheckStates.waiting_for_photo)
-        await message.answer(
-            f"{PE['safe']} <b>Отправьте фото для чека:</b>",
-            parse_mode="HTML")
+        await message.answer(f"{PE['safe']} <b>Отправьте фото для чека:</b>", parse_mode="HTML")
     except ValueError:
         await message.answer(f"{PE['warning']} <b>Введите число</b>", parse_mode="HTML")
 
 @dp.message(CheckStates.waiting_for_photo, F.photo)
 async def check_photo(message: Message, state: FSMContext):
-    uid    = message.from_user.id
-    un     = message.from_user.username or "unknown"
-    data   = await state.get_data()
-    amount = data['amount']
-    pid    = message.photo[-1].file_id
+    uid  = message.from_user.id
+    un   = message.from_user.username or "unknown"
+    data = await state.get_data(); amount = data['amount']
+    pid  = message.photo[-1].file_id
     conn = sqlite3.connect('bot_database.db')
     c = conn.cursor()
     c.execute('INSERT INTO checks (creator_id,stars_amount,photo_url,created_date) VALUES (?,?,?,?)',
               (uid, amount, pid, datetime.now().isoformat()))
     check_id = c.lastrowid; conn.commit(); conn.close()
     update_stars(uid, -amount)
-    add_log(uid, un, f"Создал чек #{check_id} на {amount} ⭐")
+    add_log(uid, un, f"Создал чек #{check_id} на {amount} звёзд")
     await message.answer_photo(
         photo=pid,
         caption=(
             f"{PE['trophy']} <b>Чек создан!</b>\n\n"
             f"<blockquote>"
-            f"{PE['star']} Сумма: <b>{amount:,} ⭐</b>\n"
-            f"{PE['check']} ID чека: <b>#{check_id}</b>"
+            f"✨ Сумма: <b>{amount:,} звёзд</b>\n"
+            f"{PE['check']} ID: <b>#{check_id}</b>"
             f"</blockquote>"
-        ),
-        parse_mode="HTML")
+        ), parse_mode="HTML")
     await state.clear()
 
 # ══════════════════════════════════════════════════
@@ -940,31 +1135,20 @@ async def back_main_cb(callback: CallbackQuery, state: FSMContext):
     user = get_user(uid)
     name = user[2] if user else "User"
     text = (
-        f"{PE['welcome']} <b>Привет, {name}!</b>\n"
-        f"Это удобный бот для покупки и передачи звёзд в Telegram.\n\n"
+        f"{PE['welcome']} <b>Привет, {name}!</b>\n\n"
         f"<blockquote>"
-        f"С помощью него можно моментально покупать и передавать звёзды.\n"
-        f"Бот работает почти год, и с помощью него куплена большая доля звёзд в Telegram."
+        f"Сервис по быстрой покупке и передаче Telegram Stars.\n"
+        f"Принимаем СБП, TON и CryptoBot. Работаем круглосуточно."
         f"</blockquote>\n\n"
         f"{PE['stats']} <b>Куплено через бота:</b>\n"
-        f"{PE['stars_deal']} <b>7 357 760 ⭐</b>  (~$110 366)"
+        f"{PE['stars_deal']} <b>7 357 760 звёзд</b>  (~$110 366)\n\n"
+        f"{PE['shield']} <i>Безопасно · Быстро · Надёжно</i>"
     )
     await callback.message.edit_text(text, reply_markup=main_keyboard(), parse_mode="HTML")
     await callback.answer()
 
 # ══════════════════════════════════════════════════
-#  ПРОЧИЕ КНОПКИ
-# ══════════════════════════════════════════════════
-@dp.callback_query(F.data == "auto_buyer")
-async def auto_buyer_cb(callback: CallbackQuery):
-    await callback.answer("🎁 Автоскупщик в разработке", show_alert=True)
-
-@dp.callback_query(F.data == "shop")
-async def shop_cb(callback: CallbackQuery):
-    await callback.answer("🛒 Магазин в разработке", show_alert=True)
-
-# ══════════════════════════════════════════════════
-#  ЗАПУСК
+#  MAIN
 # ══════════════════════════════════════════════════
 async def main():
     print("✅ Бот запущен!")
