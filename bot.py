@@ -500,4 +500,21 @@ async def withdraw_cb(callback: CallbackQuery):
 @dp.callback_query(F.data == "refill")
 async def refill_cb(callback: CallbackQuery):
     text = (
-        f"{PE[
+        f"{PE['money']} <b>Пополнение баланса</b>\n\n"
+        f"<blockquote>"
+        f"Выберите удобный способ пополнения:\n\n"
+        f"{PE['bank']} СБП\n"
+        f"{PE['diamond']} TON\n"
+        f"{PE['cryptobot']} CryptoBot"
+        f"</blockquote>"
+    )
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🏦 СБП", callback_data="refill_sbp")],
+        [InlineKeyboardButton(text="💎 TON", callback_data="refill_ton")],
+        [InlineKeyboardButton(text="🤖 CryptoBot", url=CRYPTO_BOT)],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_main")]
+    ])
+
+    await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+    await callback.answer()
