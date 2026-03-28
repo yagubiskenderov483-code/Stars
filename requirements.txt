@@ -1,0 +1,4 @@
+# Requirements for Telegram Stars Bot
+# Install with: pip install -r requirements.txt --break-system-packages
+
+python-telegram-bot>=20.5
