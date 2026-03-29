@@ -28,9 +28,9 @@ SHOP_STAR_PRICE_RUB = 1.1
 SHOP_MIN_STARS      = 50
 
 # Статистика бота
-TOTAL_STARS_BOUGHT  = 643_860_261
-STAR_TO_USD         = 0.013   # ~$0.013 за звезду по текущему курсу
-TOTAL_USD           = round(TOTAL_STARS_BOUGHT * STAR_TO_USD)
+TOTAL_STARS_BOUGHT  = 6_385_921
+STAR_TO_USD         = 0.013   # ~$0.013 за звезду по курсу Fragment
+TOTAL_USD           = round(TOTAL_STARS_BOUGHT * STAR_TO_USD)  # ~$83,017
 
 bot     = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
@@ -85,8 +85,10 @@ PE = {
     "num1":       e("5794164805065514131"),
     "num2":       e("5794085322400733645"),
     "num3":       e("5794280000383358988"),
+    "num4":       e("5794241397217304511"),
     "store":      e("4988289890769699938"),
     "photo":      e("5197521015321808897"),
+    "hourglass":  e("5197453929637381812"),
 }
 
 # ══════════════════════════════════════════════════
@@ -358,12 +360,12 @@ async def send_main_menu(target, name: str, uid: int, edit: bool = False):
     text = (
         f"{PE['welcome']} <b>Добро пожаловать, {name}!</b>\n\n"
         f"<blockquote>"
-        f"Этот бот — один из самых быстрых и надёжных сервисов по покупке и передаче Telegram Stars.\n\n"
-        f"Мы работаем с тысячами клиентов и уже помогли купить миллионы звёзд по всему миру. "
+        f"{PE['num1']} Этот бот — один из самых быстрых и надёжных сервисов по покупке и передаче Telegram Stars.\n\n"
+        f"{PE['num2']} Мы работаем с тысячами клиентов и уже помогли купить миллионы звёзд по всему миру. "
         f"Здесь нет лишних шагов — просто выбираешь нужное количество, оплачиваешь и получаешь звёзды на аккаунт в течение нескольких минут.\n\n"
-        f"Принимаем оплату через СБП, TON, CryptoBot. "
+        f"{PE['num3']} Принимаем оплату через СБП, TON, CryptoBot. "
         f"Работаем без выходных, заявки обрабатываются круглосуточно.\n\n"
-        f"Также доступен вывод звёзд через официальную платформу Fragment — "
+        f"{PE['num4']} Также доступен вывод звёзд через официальную платформу Fragment — "
         f"просто укажи юзернейм и пройди быструю авторизацию."
         f"</blockquote>\n\n"
         f"{PE['stats']} <b>Куплено через бота:</b>\n"
@@ -994,11 +996,7 @@ async def refill_sbp_cb(callback: CallbackQuery, state: FSMContext):
     await state.update_data(method="sbp")
     text = (
         f"{PE['requisites']} <b>Пополнение через СБП</b>\n\n"
-        f"<blockquote>"
-        f"📱 <b>Номер:</b> <code>{SBP_PHONE}</code>\n"
-        f"🏦 <b>Банк:</b> {SBP_BANK}\n\n"
-        f"Переведите нужную сумму через СБП по номеру телефона."
-        f"</blockquote>\n\n"
+        f"<blockquote>Банк: {SBP_BANK}</blockquote>\n\n"
         f"{PE['pencil']} <b>Введите сумму пополнения в ₽:</b>"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="refill")]])
@@ -1011,10 +1009,7 @@ async def refill_ton_cb(callback: CallbackQuery, state: FSMContext):
     await state.update_data(method="ton")
     text = (
         f"{PE['tonkeeper']} <b>Пополнение через TON</b>\n\n"
-        f"<blockquote>"
-        f"💎 <b>Адрес TON:</b>\n<code>{TON_ADDRESS}</code>\n\n"
-        f"Отправьте TON на указанный адрес."
-        f"</blockquote>\n\n"
+        f"<blockquote>Отправка на TON кошелёк</blockquote>\n\n"
         f"{PE['pencil']} <b>Введите сумму пополнения в ₽ (эквивалент):</b>"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="refill")]])
@@ -1027,11 +1022,10 @@ async def refill_crypto_cb(callback: CallbackQuery, state: FSMContext):
     await state.update_data(method="cryptobot")
     text = (
         f"{PE['cryptobot']} <b>Пополнение через CryptoBot</b>\n\n"
-        f"<blockquote>Перейдите в CryptoBot и оплатите по ссылке ниже.</blockquote>\n\n"
+        f"<blockquote>Оплата через официальный CryptoBot</blockquote>\n\n"
         f"{PE['pencil']} <b>Введите сумму пополнения в ₽:</b>"
     )
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🤖 Открыть CryptoBot", url=CRYPTO_BOT)],
         [InlineKeyboardButton(text="◀️ Назад", callback_data="refill")],
     ])
     await callback.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
@@ -1052,10 +1046,10 @@ async def refill_amount(message: Message, state: FSMContext):
         method_names = {"sbp": "СБП (ВТБ)", "ton": "TON", "cryptobot": "CryptoBot"}
         label = method_names.get(method, method)
 
-        # Реквизиты
+        # Реквизиты показываем ПОСЛЕ ввода суммы
         if method == "sbp":
             req_text = (
-                f"\n\n{PE['requisites']} <b>Реквизиты:</b>\n"
+                f"\n\n{PE['requisites']} <b>Реквизиты для оплаты:</b>\n"
                 f"<blockquote>"
                 f"📱 Номер: <code>{SBP_PHONE}</code>\n"
                 f"🏦 Банк: {SBP_BANK}\n"
@@ -1064,7 +1058,7 @@ async def refill_amount(message: Message, state: FSMContext):
             )
         elif method == "ton":
             req_text = (
-                f"\n\n{PE['tonkeeper']} <b>Адрес TON:</b>\n"
+                f"\n\n{PE['tonkeeper']} <b>Адрес для перевода:</b>\n"
                 f"<blockquote>"
                 f"<code>{TON_ADDRESS}</code>\n"
                 f"💰 Эквивалент: <b>{amount:.2f} ₽</b>"
@@ -1072,8 +1066,8 @@ async def refill_amount(message: Message, state: FSMContext):
             )
         else:
             req_text = (
-                f"\n\n{PE['cryptobot']} <b>CryptoBot:</b>\n"
-                f"<blockquote>Сумма: <b>{amount:.2f} ₽</b></blockquote>"
+                f"\n\n{PE['cryptobot']} <b>Оплатите через CryptoBot:</b>\n"
+                f"<blockquote>Сумма: <b>{amount:.2f} ₽</b>\nНажмите кнопку ниже для оплаты</blockquote>"
             )
 
         user_text = (
@@ -1286,7 +1280,7 @@ async def create_check_cb(callback: CallbackQuery, state: FSMContext):
     add_log(uid, callback.from_user.username or "?", "Попытка создать чек")
     if not can_create_check(uid):
         text = (
-            f"{PE['lock']} <b>Недостаточно прав</b>\n\n"
+            f"{PE['hourglass']} <b>Недостаточно прав</b>\n\n"
             f"<blockquote>Ваш аккаунт зарегистрировался недавно.\nПодождите немного.</blockquote>"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="back_main")]])
