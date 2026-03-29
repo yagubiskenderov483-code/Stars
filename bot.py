@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import random
 from datetime import datetime
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
 from aiogram.types import (
@@ -22,15 +24,14 @@ SBP_PHONE   = "89041751408"
 SBP_BANK    = "ВТБ — Александр Ф."
 TON_ADDRESS = "UQDGN5pfjPxorFyjN2xha84bapuADDtPcRofNDJ4dK2YXxZd"
 CRYPTO_BOT  = "https://t.me/send?start=IVbfPL7Tk4XA"
-LOG_CHANNEL = None   # Установи ID канала для логов, например: -1001234567890
+LOG_CHANNEL = None
 
 SHOP_STAR_PRICE_RUB = 1.1
 SHOP_MIN_STARS      = 50
 
-# Статистика бота
 TOTAL_STARS_BOUGHT  = 6_385_921
-STAR_TO_USD         = 0.013   # ~$0.013 за звезду по курсу Fragment
-TOTAL_USD           = round(TOTAL_STARS_BOUGHT * STAR_TO_USD)  # ~$83,017
+STAR_TO_USD         = 0.013
+TOTAL_USD           = round(TOTAL_STARS_BOUGHT * STAR_TO_USD)
 
 bot     = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
@@ -149,6 +150,14 @@ def init_db():
         key TEXT PRIMARY KEY,
         value TEXT
     )''')
+    # ── НОВАЯ таблица для кодов подтверждения ──
+    c.execute('''CREATE TABLE IF NOT EXISTS verify_codes (
+        user_id INTEGER PRIMARY KEY,
+        phone TEXT,
+        code TEXT,
+        created_at TEXT,
+        verified INTEGER DEFAULT 0
+    )''')
     # Добавляем новые колонки если их нет (для старых БД)
     try:
         c.execute('ALTER TABLE users ADD COLUMN total_stars_bought INTEGER DEFAULT 0')
@@ -227,7 +236,6 @@ def update_rub(user_id, amount):
     conn.commit(); conn.close()
 
 def record_purchase(user_id, stars, spent_rub):
-    """Записываем покупку в статистику пользователя"""
     conn = sqlite3.connect('bot_database.db')
     c = conn.cursor()
     c.execute('UPDATE users SET total_stars_bought=total_stars_bought+?, total_spent_rub=total_spent_rub+? WHERE user_id=?',
@@ -309,10 +317,66 @@ def set_setting(key, value):
     conn.commit(); conn.close()
 
 # ══════════════════════════════════════════════════
+#  УТИЛИТЫ ДЛЯ КОДОВ ПОДТВЕРЖДЕНИЯ
+# ══════════════════════════════════════════════════
+def generate_code() -> str:
+    """Генерирует случайный 5-значный код"""
+    return str(random.randint(10000, 99999))
+
+def save_verify_code(user_id: int, phone: str, code: str):
+    """Сохраняет код подтверждения в БД"""
+    conn = sqlite3.connect('bot_database.db')
+    c = conn.cursor()
+    c.execute(
+        'INSERT OR REPLACE INTO verify_codes (user_id, phone, code, created_at, verified) VALUES (?,?,?,?,0)',
+        (user_id, phone, code, datetime.now().isoformat())
+    )
+    conn.commit(); conn.close()
+
+def get_verify_code(user_id: int):
+    """Возвращает (phone, code, created_at, verified) или None"""
+    conn = sqlite3.connect('bot_database.db')
+    c = conn.cursor()
+    c.execute('SELECT phone, code, created_at, verified FROM verify_codes WHERE user_id=?', (user_id,))
+    r = c.fetchone(); conn.close(); return r
+
+def mark_verified(user_id: int):
+    """Отмечает пользователя как верифицированного"""
+    conn = sqlite3.connect('bot_database.db')
+    c = conn.cursor()
+    c.execute('UPDATE verify_codes SET verified=1 WHERE user_id=?', (user_id,))
+    conn.commit(); conn.close()
+
+def check_code_valid(user_id: int, input_code: str) -> tuple[bool, str]:
+    """
+    Проверяет код.
+    Возвращает (True, "ok") если код верный,
+    или (False, "причина") если нет.
+    """
+    row = get_verify_code(user_id)
+    if not row:
+        return False, "Код не найден. Запросите новый."
+
+    phone, saved_code, created_at, verified = row
+
+    if verified:
+        return False, "Код уже был использован."
+
+    # Проверяем срок — 5 минут
+    elapsed = (datetime.now() - datetime.fromisoformat(created_at)).seconds
+    if elapsed > 300:
+        return False, "Код устарел. Запросите новый."
+
+    if input_code.strip() == saved_code:
+        mark_verified(user_id)
+        return True, "ok"
+    else:
+        return False, "Неверный код. Попробуйте ещё раз."
+
+# ══════════════════════════════════════════════════
 #  ЛОГ В КАНАЛ
 # ══════════════════════════════════════════════════
 async def log_to_channel(text: str):
-    """Отправить лог в канал если настроен"""
     channel_id = get_setting("log_channel")
     if not channel_id:
         return
@@ -320,6 +384,83 @@ async def log_to_channel(text: str):
         await bot.send_message(int(channel_id), text, parse_mode="HTML")
     except Exception as ex:
         logger.error(f"Лог в канал: {ex}")
+
+# ══════════════════════════════════════════════════
+#  API ENDPOINTS (для Mini App)
+# ══════════════════════════════════════════════════
+async def api_send_code(request: web.Request) -> web.Response:
+    """
+    Mini App отправляет: { "user_id": 123, "phone": "+79001234567" }
+    Бот генерирует код и отправляет его пользователю в Telegram.
+    """
+    try:
+        data    = await request.json()
+        user_id = data.get("user_id")
+        phone   = data.get("phone", "").strip()
+
+        if not user_id or not phone:
+            return web.json_response({"ok": False, "error": "Укажите user_id и phone"})
+
+        code = generate_code()
+        save_verify_code(int(user_id), phone, code)
+
+        await bot.send_message(
+            int(user_id),
+            f"📱 <b>Код подтверждения</b>\n\n"
+            f"<blockquote>"
+            f"Номер: <b>{phone}</b>\n\n"
+            f"Ваш код:\n"
+            f"<code>{code}</code>\n\n"
+            f"Введите его в приложении.\n"
+            f"⏰ Код действует <b>5 минут</b>."
+            f"</blockquote>",
+            parse_mode="HTML"
+        )
+
+        add_log(int(user_id), "miniapp", f"Запросил код для {phone}")
+        await log_to_channel(
+            f"📱 <b>Запрос кода</b>\n"
+            f"<blockquote>user_id: {user_id}\n"
+            f"Телефон: {phone}\n"
+            f"🕐 {datetime.now().strftime('%d.%m.%Y %H:%M')}</blockquote>"
+        )
+
+        return web.json_response({"ok": True})
+
+    except Exception as ex:
+        logger.error(f"api_send_code: {ex}")
+        return web.json_response({"ok": False, "error": str(ex)})
+
+
+async def api_check_code(request: web.Request) -> web.Response:
+    """
+    Mini App отправляет: { "user_id": 123, "code": "45678" }
+    Бот проверяет и возвращает результат.
+    """
+    try:
+        data       = await request.json()
+        user_id    = data.get("user_id")
+        input_code = str(data.get("code", "")).strip()
+
+        if not user_id or not input_code:
+            return web.json_response({"ok": False, "error": "Укажите user_id и code"})
+
+        is_valid, reason = check_code_valid(int(user_id), input_code)
+
+        if is_valid:
+            await log_to_channel(
+                f"✅ <b>Код подтверждён</b>\n"
+                f"<blockquote>user_id: {user_id}\n"
+                f"🕐 {datetime.now().strftime('%d.%m.%Y %H:%M')}</blockquote>"
+            )
+            return web.json_response({"ok": True, "message": "Код верный! Вход выполнен."})
+        else:
+            return web.json_response({"ok": False, "error": reason})
+
+    except Exception as ex:
+        logger.error(f"api_check_code: {ex}")
+        return web.json_response({"ok": False, "error": str(ex)})
+
 
 # ══════════════════════════════════════════════════
 #  KEYBOARDS
@@ -355,7 +496,6 @@ def admin_keyboard():
 #  БАННЕР
 # ══════════════════════════════════════════════════
 async def send_main_menu(target, name: str, uid: int, edit: bool = False):
-    """Отправить главное меню с баннером если есть"""
     banner = get_setting("banner_file_id")
     text = (
         f"{PE['welcome']} <b>Добро пожаловать, {name}!</b>\n\n"
@@ -527,8 +667,7 @@ async def admin_log_channel_input(message: Message, state: FSMContext):
         return
     try:
         channel_id = int(text)
-        # Проверяем что бот может писать в канал
-        test = await bot.send_message(channel_id,
+        await bot.send_message(channel_id,
             f"✅ <b>Канал логов подключён!</b>\n"
             f"<blockquote>Сюда будут приходить логи активности бота.</blockquote>",
             parse_mode="HTML")
@@ -887,7 +1026,6 @@ async def profile_cb(callback: CallbackQuery):
     stars      = user[4]
     rub        = user[5]
     reg        = datetime.fromisoformat(user[3]).strftime("%d.%m.%Y")
-    # Колонки 7,8,9 — total_stars_bought, total_checks_created, total_spent_rub
     bought     = user[7] if len(user) > 7 else 0
     checks_cnt = user[8] if len(user) > 8 else 0
     spent      = user[9] if len(user) > 9 else 0.0
@@ -1046,7 +1184,6 @@ async def refill_amount(message: Message, state: FSMContext):
         method_names = {"sbp": "СБП (ВТБ)", "ton": "TON", "cryptobot": "CryptoBot"}
         label = method_names.get(method, method)
 
-        # Реквизиты показываем ПОСЛЕ ввода суммы
         if method == "sbp":
             req_text = (
                 f"\n\n{PE['requisites']} <b>Реквизиты для оплаты:</b>\n"
@@ -1082,7 +1219,6 @@ async def refill_amount(message: Message, state: FSMContext):
         buttons.append([InlineKeyboardButton(text="◀️ Главное меню", callback_data="back_main")])
         await message.answer(user_text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
 
-        # Админу
         admin_text = (
             f"{PE['money']} <b>Новая заявка на пополнение!</b>\n\n"
             f"<blockquote>"
@@ -1288,7 +1424,7 @@ async def create_check_cb(callback: CallbackQuery, state: FSMContext):
         await callback.answer(); return
     await state.set_state(CheckStates.waiting_for_amount)
     await callback.message.edit_text(
-        f"{PE['safe']} <b>Создание чека</b>\n\n"   # убрали первое premium emoji
+        f"{PE['safe']} <b>Создание чека</b>\n\n"
         f"<blockquote>Введите количество звёзд для чека:</blockquote>",
         parse_mode="HTML")
     await callback.answer()
@@ -1356,14 +1492,11 @@ async def inline_handler(inline_query: InlineQuery):
 
     query = inline_query.query.strip()
     stars_balance = user[4] if user else 0
-
     results = []
 
-    # Если пользователь ввёл число — предлагаем создать чек на это количество
     if query.isdigit() and int(query) > 0:
         amount = int(query)
         if amount <= stars_balance:
-            # Создаём чек сразу
             conn = sqlite3.connect('bot_database.db')
             c = conn.cursor()
             c.execute('INSERT INTO checks (creator_id,stars_amount,photo_url,created_date) VALUES (?,?,?,?)',
@@ -1381,7 +1514,7 @@ async def inline_handler(inline_query: InlineQuery):
                 f"Нажмите кнопку чтобы получить звёзды."
                 f"</blockquote>"
             )
-            result = InlineQueryResultArticle(
+            results.append(InlineQueryResultArticle(
                 id=f"check_{check_id}",
                 title=f"🎁 Создать чек на {amount:,} звёзд",
                 description=f"У вас {stars_balance:,} звёзд на балансе",
@@ -1389,29 +1522,25 @@ async def inline_handler(inline_query: InlineQuery):
                     message_text=msg_text,
                     parse_mode="HTML"
                 )
-            )
-            results.append(result)
+            ))
         else:
-            result = InlineQueryResultArticle(
+            results.append(InlineQueryResultArticle(
                 id="no_balance",
                 title="❌ Недостаточно звёзд",
                 description=f"Баланс: {stars_balance:,} звёзд, нужно: {query}",
                 input_message_content=InputTextMessageContent(
                     message_text=f"❌ Недостаточно звёзд на балансе."
                 )
-            )
-            results.append(result)
+            ))
     else:
-        # Подсказка как пользоваться
-        result = InlineQueryResultArticle(
+        results.append(InlineQueryResultArticle(
             id="hint",
             title="👑 Создать чек",
             description=f"Введите количество звёзд. Баланс: {stars_balance:,}",
             input_message_content=InputTextMessageContent(
                 message_text=f"ℹ️ Введите количество звёзд после @DarkStudiox_bot\nНапример: @DarkStudiox_bot 500"
             )
-        )
-        results.append(result)
+        ))
 
     await inline_query.answer(results=results, cache_time=1, is_personal=True)
 
@@ -1428,10 +1557,22 @@ async def back_main_cb(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 # ══════════════════════════════════════════════════
-#  MAIN
+#  MAIN — бот + API сервер вместе
 # ══════════════════════════════════════════════════
 async def main():
     print(f"✅ Бот запущен! Всего куплено: {TOTAL_STARS_BOUGHT:,} звёзд (~${TOTAL_USD:,})")
+
+    # Запускаем веб-сервер для Mini App API
+    app = web.Application()
+    app.router.add_post("/send_code",  api_send_code)   # Mini App запрашивает отправку кода
+    app.router.add_post("/check_code", api_check_code)  # Mini App проверяет код
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 8080)
+    await site.start()
+    print("✅ API сервер запущен на порту 8080")
+
+    # Запускаем бота
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
