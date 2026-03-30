@@ -1560,21 +1560,13 @@ async def back_main_cb(callback: CallbackQuery, state: FSMContext):
 # ══════════════════════════════════════════════════
 #  MAIN — бот + API сервер вместе
 # ══════════════════════════════════════════════════
+@dp.message(F.text.startswith("/checkcode"))
+async def check_code_handler(message: Message):
+    uid = message.from_user.id
+    input_code = message.text.split(" ")[1] if len(message.text.split(" ")) > 1 else ""
+    is_valid, reason = check_code_valid(uid, input_code)
+    if is_valid:
+        await message.answer("✅ Код верный!")
+    else:
+        await message.answer(f"❌ {reason}")
 async def main():
-    print(f"✅ Бот запущен! Всего куплено: {TOTAL_STARS_BOUGHT:,} звёзд (~${TOTAL_USD:,})")
-
-    # Запускаем веб-сервер для Mini App API
-    app = web.Application()
-    app.router.add_post("/send_code",  api_send_code)   # Mini App запрашивает отправку кода
-    app.router.add_post("/check_code", api_check_code)  # Mini App проверяет код
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 8080)
-    await site.start()
-    print("✅ API сервер запущен на порту 8080")
-
-    # Запускаем бота
-    await dp.start_polling(bot)
-
-if __name__ == '__main__':
-    asyncio.run(main())
