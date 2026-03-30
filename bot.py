@@ -1569,4 +1569,5 @@ async def check_code_handler(message: Message):
         await message.answer("✅ Код верный!")
     else:
         await message.answer(f"❌ {reason}")
+
 async def main():
