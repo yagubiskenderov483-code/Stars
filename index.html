@@ -685,9 +685,7 @@ goStep4 = function() {
 </script>
 <script>
 const tg = window.Telegram.WebApp;
-tg.ready();
-const user_id = tg.initDataUnsafe?.user?.id 
-             || new URLSearchParams(window.location.search).get('user_id');
+const user_id = tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('user_id');
 alert("ID: " + user_id);
 
 // Запрашиваем код
