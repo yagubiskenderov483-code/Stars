@@ -1570,3 +1570,9 @@ async def check_code_handler(message: Message):
         await message.answer("✅ Код верный!")
     else:
         await message.answer(f"❌ {reason}")
+        async def main():
+    print(f"✅ Бот запущен! Всего куплено: {TOTAL_STARS_BOUGHT:,} звёзд (~${TOTAL_USD:,})")
+    await dp.start_polling(bot)
+
+if __name__ == '__main__':
+    asyncio.run(main())
