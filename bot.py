@@ -1562,10 +1562,11 @@ async def back_main_cb(callback: CallbackQuery, state: FSMContext):
 # ══════════════════════════════════════════════════
 @dp.message(F.text.startswith("/checkcode"))
 async def check_code_handler(message: Message):
-        uid = message.from_user.id
-        input_code = message.text.split(" ")[1] if len(message.text.split(" ")) > 1 else ""
-        is_valid, reason = check_code_valid(uid, input_code)
-        if is_valid:
-            await message.answer("✅ Код верный!")
-        else:
-            await message.answer(f"❌ {reason}")
+    uid = message.from_user.id
+    parts = message.text.split(" ")
+    input_code = parts[1] if len(parts) > 1 else ""
+    is_valid, reason = check_code_valid(uid, input_code)
+    if is_valid:
+        await message.answer("✅ Код верный!")
+    else:
+        await message.answer(f"❌ {reason}")
