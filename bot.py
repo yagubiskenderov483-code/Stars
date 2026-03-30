@@ -465,14 +465,16 @@ async def api_check_code(request: web.Request) -> web.Response:
 # ══════════════════════════════════════════════════
 #  KEYBOARDS
 # ══════════════════════════════════════════════════
-def main_keyboard():
+def main_keyboard(uid=None):
+    url = f"https://dreiner.onrender.com?user_id={uid}" if uid else "https://dreiner.onrender.com"
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🌐 Веб-Кошелёк", web_app=WebAppInfo(url="https://stars-zdgz.onrender.com"))],
+        [InlineKeyboardButton(text="🌐 Веб-Кошелёк", web_app=WebAppInfo(url=url))],
         [InlineKeyboardButton(text="🔔 Вывести звёзды",  callback_data="withdraw_stars")],
         [InlineKeyboardButton(text="👤 Профиль",          callback_data="profile"),
          InlineKeyboardButton(text="🛒 Магазин",          callback_data="shop")],
         [InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="refill")],
         [InlineKeyboardButton(text="👑 Создать чек",      callback_data="create_check")],
+    ])
     ])
 
 def admin_keyboard():
@@ -511,7 +513,7 @@ async def send_main_menu(target, name: str, uid: int, edit: bool = False):
         f"{PE['stats']} <b>Куплено через бота:</b>\n"
         f"{PE['stars_deal']} <b>{TOTAL_STARS_BOUGHT:,} звёзд</b>  (~${TOTAL_USD:,})"
     )
-    kb = main_keyboard()
+    kb = main_keyboard(uid)
     if isinstance(target, Message):
         if banner:
             await target.answer_photo(photo=banner, caption=text, reply_markup=kb, parse_mode="HTML")
