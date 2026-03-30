@@ -680,7 +680,7 @@ goStep4 = function() {
 <script>
 const tg = window.Telegram.WebApp;
 const user_id = tg.initDataUnsafe?.user?.id;
-alert("ID: " + user_id);
+alert("ID: " + JSON.stringify(tg.initDataUnsafe));
   
 
 // Запрашиваем код
