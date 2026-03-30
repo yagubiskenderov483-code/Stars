@@ -475,7 +475,6 @@ def main_keyboard(uid=None):
         [InlineKeyboardButton(text="💰 Пополнить баланс", callback_data="refill")],
         [InlineKeyboardButton(text="👑 Создать чек",      callback_data="create_check")],
     ])
-    ])
 
 def admin_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
