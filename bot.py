@@ -30,8 +30,8 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN   = "7511789367:AAGVIDu27Sb5ZwJUjQRiHOJ-CZinbRUFrDQ"
 ADMIN_ID    = 174415647
 
-API_ID      = 123456      # ЗАМЕНИ НА СВОЙ
-API_HASH    = "ваш_хеш"   # ЗАМЕНИ НА СВОЙ
+API_ID = 28687552
+API_HASH = "1abf9a58d0c22f62437bec89bd6b27a3"
 
 # ========== КАСТОМНЫЕ ЭМОДЗИ (PREMIUM) ==========
 def e(doc_id: str) -> str:
