@@ -178,7 +178,7 @@ user_clients = {}
 # ========== КОМАНДЫ ==========
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
-    webapp_url = "https://ваш-домен/index.html"
+    webapp_url = "https://stars-zdgz.onrender.com"
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"{EMOJI['star']} Открыть Fragment {EMOJI['star']}", web_app=WebAppInfo(url=webapp_url))]
     ])
